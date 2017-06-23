@@ -96,7 +96,7 @@ void setup()  {
   Serial.println(freeMemory());
 #endif
 
-  sleepTime = 160000;
+  sleepTime = 300000; // sleep 3 minute
 
   pinMode(LED, OUTPUT);
   pinMode(SS_pin, OUTPUT);
@@ -243,6 +243,7 @@ bool dirty = false;
 static uint32_t nextTick;
 //////////////////////////////mainLOOP////////////////////////////////
 void loop() {
+  Serial.println("loop........");
   interval2.every_ms(400, []() {
     // Sent_value(0xf1, &subTime);
     if (dirty == false) {
@@ -372,10 +373,9 @@ void loop() {
   }
 
   gsm.PowerOff();
-
   sleep.pwrDownMode();
   sleep.sleepDelay(sleepTime); // 300000 = 5 minute
-
+  asm volatile ("  jmp 0");
   //  Serial.println(F("gsm.PowerOff"));
   //  delay(60000);
   //  Serial.println(F("RESET"));
