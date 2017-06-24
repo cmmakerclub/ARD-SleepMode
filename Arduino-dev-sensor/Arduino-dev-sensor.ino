@@ -10,9 +10,10 @@
 #include <Adafruit_BME280.h>
 
 //#include <AltSoftSerial.h>
-//#include <Sleep_n0m1.h>
-//Sleep sleep;
-//unsigned long sleepTime;
+
+#include <Sleep_n0m1.h>
+Sleep sleep;
+unsigned long sleepTime;
 
 
 int eeAddress = 0;
@@ -99,7 +100,9 @@ uint16_t _lidStatus, _flameStatus, _press, _light, _carbon, _methane;
 float _tempBME, _humidBME, _pressBME;
 
 uint8_t gpsCounter = 0;
+uint8_t stmTime = 10;
 float subTime = 5;
+
 
 uint32_t machineCycle = 0;
 
@@ -137,6 +140,8 @@ bool open_tcp();
 
 void setup()  {
   Serial.begin(9600);
+  Serial2.begin(9600);  //  serial to stm
+
   Serial.println(millis() / 1000);
 #if DEBUG_SERIAL
   Serial.println(F("Program Start."));
@@ -146,7 +151,7 @@ void setup()  {
   Serial.println(freeMemory());
 #endif
 
-  //  sleepTime = 300000; // sleep 3 minute
+  sleepTime = 1000000; // sleep 3 minute
 
   pinMode(LED, OUTPUT);
   pinMode(SS_pin, OUTPUT);
@@ -289,10 +294,6 @@ void setup()  {
   }
   else {
   }
-  //  clear mode stm
-  Sent_value(0xf1, &subTime);
-  Sent_value(0xf1, &subTime);
-  Sent_value(0xf1, &subTime);
 
   Serial.println(millis() / 1000);
 
@@ -337,7 +338,7 @@ void loop() {
       EEPROM.get(eeAddress, customVar);
       gps_lat = customVar.field1;
       gps_lon = customVar.field2;
-      
+
       Serial.print("Read EEPROM : ");
       Serial.print(gps_lat);
       Serial.print("  ");
@@ -447,10 +448,13 @@ void loop() {
       }
     }
 
-    Sent_value(0xf1, &subTime);
-    delay(10);
-    Sent_value(0xf1, &subTime);
-
+    Serial2.write(stmTime);
+    delay(1000);
+    Serial2.write(stmTime);
+    delay(1000);
+    Serial2.write(stmTime);
+    delay(1000);
+    
     dirty = false;
     is_data_OK = 0;
 
@@ -463,12 +467,12 @@ void loop() {
 
   Serial.println(F("gsm PowerOff zzZ"));
   gsm.PowerOff();
-  delay(60000);
-  asm volatile ("  jmp 0");
+  //  delay(60000);
+  //  asm volatile ("  jmp 0");
 
 
   //  sleep.pwrSaveMode();
-  //  sleep.pwrDownMode();
-  //  sleep.sleepDelay(sleepTime); // 300000 = 5 minute
+  sleep.pwrDownMode();
+  sleep.sleepDelay(sleepTime); // 300000 = 5 minute
   //  asm volatile ("  jmp 0");
 }
