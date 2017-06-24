@@ -337,12 +337,12 @@ void loop() {
       EEPROM.get(eeAddress, customVar);
       gps_lat = customVar.field1;
       gps_lon = customVar.field2;
-      Serial.print("Read: ");
+      
+      Serial.print("Read EEPROM : ");
       Serial.print(gps_lat);
       Serial.print("  ");
       Serial.println(gps_lon);
     }
-
 
     Serial.println("=== BME ===");
     Serial.print("T = ");
