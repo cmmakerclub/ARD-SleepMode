@@ -14,6 +14,15 @@
 //Sleep sleep;
 //unsigned long sleepTime;
 
+
+int eeAddress = 0;
+struct MyObject {
+  uint32_t field1;
+  uint32_t field2;
+};
+boolean gpsState = false;
+
+
 #define SEALEVELPRESSURE_HPA (1013.25)
 Adafruit_BME280 bme; // I2C
 
@@ -64,7 +73,7 @@ CMMC_Interval interval2;
 #define addLon  2
 
 
-#define ECHO  6
+#define ECHO  5
 #define TRIG  7
 long duration;
 
@@ -93,7 +102,6 @@ uint8_t gpsCounter = 0;
 float subTime = 5;
 
 uint32_t machineCycle = 0;
-
 
 
 #include "STM32.h"
@@ -222,6 +230,7 @@ void setup()  {
       gps_lon = "0.0";
       gps_alt = "0.0";
       gps_linked = false;
+      gpsState = true;
       break;
     }
   }
@@ -268,6 +277,14 @@ void setup()  {
       Serial.println(F("Stop GPS"));
       gps.Stop();
       gps.DisableNMEA();
+
+
+      MyObject gpsValue = {
+        gps_lat.toFloat() * 10000000,
+        gps_lon.toFloat() * 10000000
+      };
+      eeAddress += sizeof(uint32_t);
+      EEPROM.put(eeAddress, gpsValue);
     }
   }
   else {
@@ -314,8 +331,18 @@ void loop() {
     pinMode(A0, INPUT);
     _batt = analogRead(A0);
 
-    //    gps_lat = EEPROM.read(addLat);
-    //    gps_lon = EEPROM.read(addLon);
+    if (gpsState == true) {
+      uint32_t eeAddress = sizeof(uint32_t);
+      MyObject customVar;
+      EEPROM.get(eeAddress, customVar);
+      gps_lat = customVar.field1;
+      gps_lon = customVar.field2;
+      Serial.print("Read: ");
+      Serial.print(gps_lat);
+      Serial.print("  ");
+      Serial.println(gps_lon);
+    }
+
 
     Serial.println("=== BME ===");
     Serial.print("T = ");
@@ -407,7 +434,7 @@ void loop() {
         tcp.println(data3);
         tcp.print(data4);
         tcp.StopSend();
-        
+
         Serial.println(millis() / 1000);
       }
       count_down = 30;
