@@ -24,24 +24,26 @@ void debug(String data)
 {
   Serial.println(data);
 }
+
 void data_out(char data)
 {
   Serial.write(data);
 }
-void setup() 
+
+void setup()
 {
   Serial.begin(9600);
   gsm.begin(&mySerial,9600);
   gsm.Event_debug = debug;
   Serial.println(F("UC20"));
-  gsm.PowerOn(); 
+  gsm.PowerOn();
   while(gsm.WaitReady()){}
- 
+
   Serial.print(F("GetOperator --> "));
   Serial.println(gsm.GetOperator());
   Serial.print(F("SignalQuality --> "));
   Serial.println(gsm.SignalQuality());
- 
+
   Serial.println(F("Disconnect net"));
   net.DisConnect();
   Serial.println(F("Set APN and Password"));
@@ -65,22 +67,22 @@ void setup()
   net.DisConnect();
 }
 
-void read_file(String pattern,String file_name)
+void read_file(String pattern, String file_name)
 {
   file.DataOutput =  data_out;
   file.ReadFile(pattern,file_name);
 }
-void loop() 
+void loop()
 {
-  
+
   if (gsm.available())
   {
     Serial.write(gsm.read());
-  } 
+  }
   if (Serial.available())
   {
     char c = Serial.read();
     gsm.write(c);
-    
-  } 
+
+  }
 }

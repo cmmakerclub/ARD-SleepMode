@@ -10,8 +10,13 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include <Sleep_n0m1.h>
+#include "File.h"
+#include "http.h"
+#include <ArduinoJson.h>
+
+HTTP http;
 Sleep sleep;
-unsigned long sleepTime;
+uint32_t sleepTime;
 float beginAddressEEP = 0.000f;
 int eeAddress = 0;
 
@@ -24,13 +29,22 @@ struct MyObject {
 boolean gpsState = false;
 
 #define SEALEVELPRESSURE_HPA (1013.25)
+// bool ret = tcp.Open("sock.traffy.xyz","10777");
+//  bool ret = tcp.Open("api.traffy.xyz", "10777");
+// bool ret = tcp.Open("red.cmmc.io","9991");
+#define TCP_SERVER_ENDPOINT "128.199.143.200"
+#define TCP_SERVER_PORT     "10777"
 Adafruit_BME280 bme; // I2C
 
 GNSS gps;
 INTERNET net;
 TCP tcp;
+UC_FILE file;
 
 CMMC_Interval interval2;
+
+// JSON
+StaticJsonBuffer<200> jsonBuffer;
 
 #define SHOW_RAM 1
 #define DEBUG_SERIAL 1
@@ -45,7 +59,7 @@ CMMC_Interval interval2;
 #define PASS ""
 
 #define BINID            "91"
-//#define APPID            "SmartTrash"
+//#define APPID           "SmartTrash"
 
 
 //AltSoftSerial mySerial;
@@ -118,6 +132,7 @@ void setEEProm() {
   Serial.println(beginAddressEEP, 3);
 
 
+
   if (beginAddressEEP != 123.456f) {
     beginAddressEEP = 123.456f;
     MyObject customVar = {
@@ -177,8 +192,69 @@ void readDistance() {
 }
 
 
+String netpieJsonString;
+long getSleepTimeFromNetpie() {
+    http.begin(1);
+    Serial.println(F("Send HTTP GET"));
+    http.url("http://api.netpie.io/topic/SmartTrash/time?retain&auth=YGO1C5bATVNctTE:wN7khNDXgadngRN5WxMGMc7z0");
+    Serial.println(http.get());
+    Serial.println(F("Clear data in RAM"));
+    file.Delete(RAM,"*");
+    Serial.println(F("Save HTTP Response To RAM"));
+    http.SaveResponseToMemory(RAM,"netpie.json");
+    Serial.println(F("Read data in RAM"));
+
+    // clear String
+    netpieJsonString = "";
+    read_file(RAM, "netpie.json");
+    Serial.println("READ FILE JSON");
+    Serial.println(netpieJsonString);
+    DynamicJsonBuffer jsonBuffer;
+    JsonArray& root = jsonBuffer.parseArray(netpieJsonString.c_str());
+
+    // Test if parsing succeeds.
+    if (!root.success()) {
+      Serial.println("parseObject() failed");
+      return;
+    }
+    else {
+      Serial.println("parsed OK.");
+      JsonObject& netpieJsonObject = root[0];
+      Serial.print("TIME PAYLOAD: ");
+      const char* payload = netpieJsonObject["payload"];
+      const char* topic = netpieJsonObject["topic"];
+      const char* lastUpdated = netpieJsonObject["lastUpdated"];
+      long payloadInt = String(payload).toInt();
+
+
+      Serial.print("payload: ");
+      Serial.println(payload);
+
+      Serial.print("payloadInt: ");
+      Serial.println(payloadInt);
+
+      Serial.print("topic: ");
+      Serial.println(topic);
+
+      Serial.print("lastUpdated: ");
+      Serial.println(lastUpdated);
+      return payloadInt;
+    }
+  };
+
 //////////////////////////////mainSETUP////////////////////////////////
 bool open_tcp();
+
+void data_out(char data)
+{
+  netpieJsonString += String(data);
+}
+
+void read_file(String pattern, String file_name)
+{
+  file.DataOutput =  data_out;
+  file.ReadFile(pattern, file_name);
+}
 
 void setup()  {
   Serial.begin(9600);
@@ -199,13 +275,13 @@ void setup()  {
   pinMode(TRIG, OUTPUT);
 
   setEEProm();
-  sleepTime = 1000000; // sleep 3 minute
+  sleepTime = 1 * 60 * 1000; // sleep 1 minute
   bme.begin();  // bme sensor begin
 
   int z = 0;
   while (z < 5) {
     digitalWrite(LED, HIGH);   // turn the LED on (HIGH is the voltage level)
-    delay(100);                       // wait for a second
+    delay(100);                // wait for a second
     digitalWrite(LED, LOW);    // turn the LED off by making the voltage LOW
     delay(10);
     z++;
@@ -225,6 +301,7 @@ void setup()  {
 #endif
   }
 
+
   /////////////////////////////3G//////////////////////////////////
 #if DEBUG_SERIAL
   gsm.Event_debug = debug;
@@ -243,12 +320,17 @@ void setup()  {
   net.DisConnect();
   net.Configure(APN, USER, PASS);
   net.Connect();
+
+  Serial.println(F("Show My IP"));
+  Serial.println(net.GetIP());
+  Serial.println(F("Start HTTP"));
+
 #if DEBUG_SERIAL
   Serial.println(F("NET Connected"));
 #endif
-
-  Serial.println(millis() / 1000);
-
+  long sleepTimeFromNetpie = getSleepTimeFromNetpie();
+  Serial.print("SLEEP TIME [NETPIE] = ");
+  Serial.println(sleepTimeFromNetpie);
   //////////////////////////////GPS//////////////////////////////
   gps.Start();
   gps.EnableNMEA();
@@ -342,10 +424,7 @@ void setup()  {
 
 bool open_tcp() {
   Serial.println();
-  // bool ret = tcp.Open("sock.traffy.xyz","10777");
-  //  bool ret = tcp.Open("api.traffy.xyz", "10777");
-  // bool ret = tcp.Open("red.cmmc.io","9991");
-  bool ret = tcp.Open("128.199.143.200", "10777");
+  bool ret = tcp.Open(TCP_SERVER_ENDPOINT, TCP_SERVER_PORT);
   return ret;
 }
 
@@ -476,6 +555,7 @@ void loop() {
       }
     }
 
+    // writeSleep to STM
     Serial2.write(stmTime);
     delay(1000);
     Serial2.write(stmTime);
@@ -493,12 +573,16 @@ void loop() {
   Serial.println(millis() / 1000);
 
   Serial.println(F("gsm PowerOff zzZ"));
+  Serial.print("sleep for");
+  Serial.print(sleepTime);
+
   gsm.PowerOff();
   //  sleep.pwrSaveMode();
   sleep.pwrDownMode();
   // STM Sleep for n seconds
+  Serial.println(millis());
   sleep.sleepDelay(sleepTime); // 300000 = 5 minute
-
-  // Arduino Sleep
+  Serial.println(millis());
+  // Arduino Reset
   asm volatile ("  jmp 0");
 }
