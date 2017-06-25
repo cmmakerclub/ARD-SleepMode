@@ -15,18 +15,15 @@
 #include <ArduinoJson.h>
 
 HTTP http;
-Sleep sleep;
-uint32_t sleepTime;
-float beginAddressEEP = 0.000f;
+Sleep sleepCtrl;
+float eepromFloatInitializedByte = 0.000f;
 int eeAddress = 0;
 
-struct MyObject {
-  uint32_t field1;
-  uint32_t field2;
+struct EEPROMStructure {
+  double lat;
+  double lng;
   uint32_t sleepTimeS;
 };
-
-boolean gpsState = false;
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 // bool ret = tcp.Open("sock.traffy.xyz","10777");
@@ -114,11 +111,7 @@ float _tempBME, _humidBME, _pressBME;
 uint8_t gpsCounter = 0;
 uint8_t stmTime = 10;
 float subTime = 5;
-
-
 uint32_t machineCycle = 0;
-
-
 #include "STM32.h"
 
 #if DEBUG_SERIAL
@@ -128,39 +121,31 @@ void debug(String data) {
 #endif
 
 void setEEProm() {
-  EEPROM.get(eeAddress, beginAddressEEP);
-  Serial.println(beginAddressEEP, 3);
+  EEPROM.get(eeAddress, eepromFloatInitializedByte);
+  Serial.println(eepromFloatInitializedByte, 3);
 
-
-
-  if (beginAddressEEP != 123.456f) {
-    beginAddressEEP = 123.456f;
-    MyObject customVar = {
-      0,
-      0,
-      10
-    };
-    EEPROM.put(eeAddress, beginAddressEEP);
+  // intialize EEPROM
+  if (eepromFloatInitializedByte != 123.456f) {
+    eepromFloatInitializedByte = 123.456f;
+    // write first signature byte
+    EEPROM.put(eeAddress, eepromFloatInitializedByte);
+    // intialize eeprom structure
+    EEPROMStructure defaultEEPROMValue = { 0.0f, 0.0f, 10 };
     eeAddress += sizeof(float);
-    EEPROM.put(eeAddress, customVar);
-  } else {
-    //    MyObject customVar = {
-    //      random(1000),
-    //      random(1000),
-    //      10
-    //    };
-    //    eeAddress += sizeof(float);
-    //    EEPROM.put(eeAddress, customVar);
 
-    eeAddress = sizeof(float);
-
-    MyObject customVar;
-    EEPROM.get(eeAddress, customVar);
-
+    // write default value to eeprom
+    EEPROM.put(eeAddress, defaultEEPROMValue);
+    eeAddress += sizeof(EEPROMStructure);
+  }
+  // load eeprom
+  else {
+    // eeAddress = sizeof(float);
+    EEPROMStructure eepromCached;
+    EEPROM.get(0+sizeof(float), eepromCached);
     Serial.println("Read custom object from EEPROM: ");
-    Serial.println(customVar.field1);
-    Serial.println(customVar.field2);
-    Serial.println(customVar.sleepTimeS);
+    Serial.println(eepromCached.lat);
+    Serial.println(eepromCached.lng);
+    Serial.println(eepromCached.sleepTimeS);
   }
 }
 
@@ -275,7 +260,6 @@ void setup()  {
   pinMode(TRIG, OUTPUT);
 
   setEEProm();
-  sleepTime = 1 * 60 * 1000; // sleep 1 minute
   bme.begin();  // bme sensor begin
 
   int z = 0;
@@ -350,18 +334,23 @@ void setup()  {
     digitalWrite(LED, LOW);
     delay(100);
     gpsCounter += 1;
-    Serial.println("Wating GPS...");
+    if (gpsCounter%5 == 0) {
+      Serial.print(gpsCounter);
+      Serial.println(" Wating GPS...");
+    }
 
+    // gps timeout
     if (millis() > gpsTimeoutNextTick) {
+      Serial.println("GPS Timeout..");
       gps_lat = "0.0";
       gps_lon = "0.0";
       gps_alt = "0.0";
       gps_linked = false;
-      gpsState = true;
       break;
     }
   }
 
+  // action after finish GPS searching...
   if (gps_linked) {
     if (gps_data.substring(0, 6) == "$GPGGA") {
       gps_data.toCharArray(GNSS_data, 58);
@@ -395,27 +384,39 @@ void setup()  {
       // gps_alt += GNSS_data[57];
       // gps_alt += GNSS_data[58];
 
-      Serial.print(gps_lat);
-      Serial.print(F("  "));
-      Serial.print(gps_lon);
-      Serial.print(F("  "));
-      Serial.println(gps_alt);
-      delay(1000);
       Serial.println(F("Stop GPS"));
       gps.Stop();
       gps.DisableNMEA();
 
-
-      MyObject gpsValue = {
-        gps_lat.toFloat() * 10000000,
-        gps_lon.toFloat() * 10000000
-      };
-      eeAddress += sizeof(float);
-      EEPROM.put(eeAddress, gpsValue);
-
+      // cache GPS Information
+      // EEPROMStructure gpsValue = { gps_lat.toDouble(), gps_lon.toDouble() };
+      // eeAddress += sizeof(eepromFloatInitializedByte);
+      // EEPROM.put(eeAddress, gpsValue);
+      // Serial.println("update GPS cache...");
+      // Serial.print(gpsValue.lat);
+      // Serial.print(F("  "));
+      // Serial.print(gpsValue.lng);
+      // Serial.print(F("  "));
+      // Serial.println(gps_alt);
+      delay(1000);
     }
   }
   else {
+      // NO GPS LINK: LOAD LAT, LNG from EEPROM
+      uint32_t eeAddress = sizeof(eepromFloatInitializedByte);
+      EEPROMStructure eepromCached;
+      EEPROM.get(0+eeAddress, eepromCached);
+
+      // gps_lat = String(eepromCached.lat);
+      // gps_lon = String(eepromCached.lng);
+      // subTime = eepromCached.sleepTimeS;
+
+      Serial.print("Read EEPROM : ");
+      Serial.print(eepromCached.lat);
+      Serial.print("  ");
+      Serial.print(eepromCached.lng);
+      Serial.print("  ");
+      Serial.println(subTime);
   }
 
   Serial.println(millis() / 1000);
@@ -446,22 +447,6 @@ void loop() {
 
     pinMode(A0, INPUT);
     _batt = analogRead(A0);
-
-    if (gpsState == true) {
-      uint32_t eeAddress = sizeof(uint32_t);
-      MyObject customVar;
-      EEPROM.get(eeAddress, customVar);
-      gps_lat = customVar.field1;
-      gps_lon = customVar.field2;
-      subTime = customVar.sleepTimeS;
-
-      Serial.print("Read EEPROM : ");
-      Serial.print(gps_lat);
-      Serial.print("  ");
-      Serial.print(gps_lon);
-      Serial.print("  ");
-      Serial.println(subTime);
-    }
 
     Serial.println("=== BME ===");
     Serial.print("T = ");
@@ -573,16 +558,17 @@ void loop() {
   Serial.println(millis() / 1000);
 
   Serial.println(F("gsm PowerOff zzZ"));
-  Serial.print("sleep for");
-  Serial.print(sleepTime);
+  // Serial.print("sleep for");
+  // Serial.print(eepromCached.sleepTimeS);
 
   gsm.PowerOff();
   //  sleep.pwrSaveMode();
-  sleep.pwrDownMode();
+  sleepCtrl.pwrDownMode();
   // STM Sleep for n seconds
   Serial.println(millis());
-  sleep.sleepDelay(sleepTime); // 300000 = 5 minute
+  // sleep.sleepDelay(sleepTime); // 300000 = 5 minute
   Serial.println(millis());
   // Arduino Reset
   asm volatile ("  jmp 0");
+
 }
