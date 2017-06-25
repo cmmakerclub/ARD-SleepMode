@@ -523,12 +523,7 @@ bool writeDataStringToTCPSocket() {
     }
 }
 
-//////////////////////////////mainLOOP////////////////////////////////
-void loop() {
-  readAllSensors();
-  builDataStringForTCPSocket();
-  writeDataStringToTCPSocket();
-
+void sendSleepTimeInSecondToSTM32() {
   // writeSleep to STM
   Serial2.write(stmSleepTimeS);
   delay(1000);
@@ -536,9 +531,10 @@ void loop() {
   delay(1000);
   Serial2.write(stmSleepTimeS);
   delay(1000);
-
   Serial.println(F("Sent..."));
+}
 
+void sleepArduino() {
   Serial.println(millis() / 1000);
   Serial.println(F("gsm PowerOff zzZ"));
   // Serial.print("sleep for");
@@ -552,6 +548,13 @@ void loop() {
   // sleep.sleepDelay(sleepTime); // 300000 = 5 minute
   Serial.println(millis());
   // Arduino Reset
-  asm volatile ("  jmp 0");
-
+  asm volatile ("  jmp 0");   
+}
+//////////////////////////////mainLOOP////////////////////////////////
+void loop() {
+  readAllSensors();
+  builDataStringForTCPSocket();
+  writeDataStringToTCPSocket();
+  sendSleepTimeInSecondToSTM32();
+  sleepArduino();
 }
