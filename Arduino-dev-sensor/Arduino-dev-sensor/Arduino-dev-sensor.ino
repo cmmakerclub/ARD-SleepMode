@@ -306,7 +306,7 @@ void setup()  {
     delay(100);
 
     gpsCounter += 1;
-    if (gpsCounter%5 == 0) {
+    if (gpsCounter%10 == 0) {
       Serial.print(gpsCounter);
       Serial.println(" Wating GPS...");
     }
@@ -429,7 +429,7 @@ void readAllSensors() {
 
     digitalWrite(LED, HIGH);
 #if DEBUG_SERIAL
-    Serial.print(F("print : "));
+    // Serial.print(F("print : "));
 #endif
 }
 
@@ -438,9 +438,8 @@ String globalData2;
 String globalData3;
 String globalData4;
 
-void buildDataString() {
+void builDataStringForTCPSocket() {
     float mq4_co = 0.0, mq9_ch4 = 0.0;
-
     // _volume++;
     // publish("/" APPID "/gearname/" BINID "/globalData1", buffer, false);
     globalData1 = String (BINID ":");
@@ -472,69 +471,73 @@ void buildDataString() {
     data_s = gps_lat + "," + gps_lon + "," + gps_alt;
     globalData4 += data_s;
     Serial.println(globalData4);
-
 }
 
-//////////////////////////////mainLOOP////////////////////////////////
-void loop() {
-  //  if (dirty) {
-  if (1) {
-    readAllSensors();
-    buildDataString();
-    bool tcpOpenFailed = false;
-    int count_down = 100;
-    while ( !open_tcp() && count_down ) {
-#if DEBUG_SERIAL
-      Serial.println("retry open tcp...");
-#endif
-      count_down--;
-      delay(1000);
-    }
-    if (count_down == 0) {
-      tcpOpenFailed = true;
-#if DEBUG_SERIAL
-      Serial.println("TCP Open failed...");
-#endif
-    }
-    else {
-      count_down = 100;
+bool openTCPWithBestEffort() {
+  bool tcpOpenFailed = false;
+  int count_down = 100;
+  while ( !open_tcp() && count_down ) {
+    Serial.println("retry open tcp...");
+    count_down--;
+    delay(1000);
+  }
+  if (count_down == 0) {
+    tcpOpenFailed = true;
+    Serial.println("TCP Open failed...");
+  }
+
+  return tcpOpenFailed;
+}
+
+bool startSendTCPWithBestEffort() {
+      int count_down = 100;
       while ( !tcp.StartSend() && count_down ) {
-#if DEBUG_SERIAL
         Serial.println("retry send");
-#endif
         count_down--;
         delay(500);
       }
-      if (count_down) {
+      return count_down > 0;
+}
+
+bool closeTCPWithBestEffort() {
+    int count_down = 30;
+    while ( !tcp.Close() && count_down ) {
+      count_down--;
+      delay(500);
+      Serial.println("close tcp");
+    }
+
+    return count_down >0;
+}
+
+bool writeDataStringToTCPSocket() {
+    if (openTCPWithBestEffort()) {
+      if (startSendTCPWithBestEffort()) {
         tcp.println(globalData1);
         tcp.println(globalData2);
         tcp.println(globalData3);
         tcp.print(globalData4);
         tcp.StopSend();
-
-        Serial.println(millis() / 1000);
-      }
-      count_down = 30;
-      while ( !tcp.Close() && count_down ) {
-        count_down--;
-        delay(500);
-#if DEBUG_SERIAL
-        Serial.println("close tcp");
-#endif
+        closeTCPWithBestEffort();
       }
     }
+}
 
-    // writeSleep to STM
-    Serial2.write(stmSleepTimeS);
-    delay(1000);
-    Serial2.write(stmSleepTimeS);
-    delay(1000);
-    Serial2.write(stmSleepTimeS);
-    delay(1000);
+//////////////////////////////mainLOOP////////////////////////////////
+void loop() {
+  readAllSensors();
+  builDataStringForTCPSocket();
+  writeDataStringToTCPSocket();
 
-    dirty = false;
-    Serial.println(F("Sent..."));
-  }
+  // writeSleep to STM
+  Serial2.write(stmSleepTimeS);
+  delay(1000);
+  Serial2.write(stmSleepTimeS);
+  delay(1000);
+  Serial2.write(stmSleepTimeS);
+  delay(1000);
+
+  Serial.println(F("Sent..."));
 
   Serial.println(millis() / 1000);
   Serial.println(F("gsm PowerOff zzZ"));
