@@ -64,23 +64,6 @@ StaticJsonBuffer<200> jsonBuffer;
 #define LED 13
 #define MODE_PIN A4
 #define SS_pin                A5
-#define _volume_OK            (1<<0)
-#define _lidStatus_OK         (1<<1)
-#define _temp_OK              (1<<2)
-#define _humid_OK             (1<<3)
-#define _flameStatus_OK       (1<<4)
-#define _soundStatus_OK       (1<<5)
-#define _carbon_OK            (1<<6)
-#define _methane_OK           (1<<7)
-#define _light_OK             (1<<8)
-#define _pitch_OK             (1<<9)
-#define _roll_OK              (1<<10)
-#define _press_OK             (1<<11)
-#define _batt_OK              (1<<12)
-
-
-#define addLat  1
-#define addLon  2
 
 
 #define ECHO  5
@@ -101,9 +84,7 @@ uint16_t _lidStatus, _flameStatus, _press, _light, _carbon, _methane;
 float _tempBME, _humidBME, _pressBME;
 
 uint8_t gpsCounter = 0;
-uint8_t stmTime = 10;
-float localSleepTime = 5;
-uint32_t machineCycle = 0;
+uint8_t stmSleepTimeS = 10;
 
 #if DEBUG_SERIAL
 void debug(String data) {
@@ -262,22 +243,21 @@ void setup()  {
     z++;
   }
 
-  if (digitalRead(MODE_PIN) == HIGH) {
-    // localSleepTime 1 hour
-    localSleepTime = 60;
-#if DEBUG_SERIAL
-    Serial.println("HIGH");
-#endif
-  } else {
-    // localSleepTime 3 minute 3 * 60 = 180
-    localSleepTime = 180 + 1000;
-#if DEBUG_SERIAL
-    Serial.println("LOW");
-#endif
-  }
+// GPIO CONFIGURATION
+//   if (digitalRead(MODE_PIN) == HIGH) {
+//     localSleepTime = 60;
+// #if DEBUG_SERIAL
+//     Serial.println("HIGH");
+// #endif
+//   } else {
+//     // localSleepTime 3 minute 3 * 60 = 180
+//     localSleepTime = 180 + 1000;
+// #if DEBUG_SERIAL
+//     Serial.println("LOW");
+// #endif
+//   }
 
-
-  /////////////////////////////3G//////////////////////////////////
+/////////////////////////////3G//////////////////////////////////
 #if DEBUG_SERIAL
   gsm.Event_debug = debug;
 #endif
@@ -324,6 +304,7 @@ void setup()  {
     delay(5);
     digitalWrite(LED, LOW);
     delay(100);
+
     gpsCounter += 1;
     if (gpsCounter%5 == 0) {
       Serial.print(gpsCounter);
@@ -407,7 +388,6 @@ void setup()  {
       Serial.print("  ");
       Serial.print(eepromCached.lng);
       Serial.print("  ");
-      Serial.println(localSleepTime);
   }
 
   Serial.println(millis() / 1000);
@@ -423,12 +403,8 @@ bool open_tcp() {
 bool dirty = false;
 static uint32_t nextTick;
 
-//////////////////////////////mainLOOP////////////////////////////////
-void loop() {
-  float mq4_co = 0.0, mq9_ch4 = 0.0;
 
-  //  if (dirty) {
-  if (1) {
+void readAllSensors() {
     _temp = bme.readTemperature();
     _humid = bme.readHumidity();
     _press = bme.readPressure() / 100.0F;
@@ -455,38 +431,56 @@ void loop() {
 #if DEBUG_SERIAL
     Serial.print(F("print : "));
 #endif
+}
+
+String globalData1;
+String globalData2;
+String globalData3;
+String globalData4;
+
+void buildDataString() {
+    float mq4_co = 0.0, mq9_ch4 = 0.0;
+
     // _volume++;
-    // publish("/" APPID "/gearname/" BINID "/data1", buffer, false);
-    String data1 = String (BINID ":");
+    // publish("/" APPID "/gearname/" BINID "/globalData1", buffer, false);
+    globalData1 = String (BINID ":");
     String data_s = String(_volume) + "," + String(_lidStatus) + "," + String(_temp) + ","
                     + String(_humid) + "," + String(_flameStatus);
-    data1 += data_s;
+    globalData1 += data_s;
 #if DEBUG_SERIAL
-    Serial.println(data1);
+    Serial.println(globalData1);
 #endif
     // DATA2 Preparation
-    String data2 = String (BINID ":");
+    globalData2 = String (BINID ":");
     data_s = String(_pitch) + "," + String(_roll) + "," + String(_press) + "," + String(_batt);
-    data2 += data_s;
+    globalData2 += data_s;
 #if DEBUG_SERIAL
-    Serial.println(data2);
+    Serial.println(globalData2);
 #endif
     // DATA3 Preparation
-    String data3 = String (BINID ":");
+    globalData3 = String (BINID ":");
     data_s = String(_soundStatus) + "," + String(mq4_co) + "," +
-             String(mq9_ch4) + "," + String(_light) + "," + String(localSleepTime) + "," + String(millis() / 1000.00) + "," +
+             String(mq9_ch4) + "," + String(_light) + "," + String(stmSleepTimeS) + "," + String(millis() / 1000.00) + "," +
              String(_methane) + "," +
              String(_carbon);
-    data3 += data_s;
+    globalData3 += data_s;
 #if DEBUG_SERIAL
-    Serial.println(data3);
+    Serial.println(globalData3);
 #endif
     // DATA4 Preparation
-    String data4 = String (BINID ":");
+    globalData4 = String (BINID ":");
     data_s = gps_lat + "," + gps_lon + "," + gps_alt;
-    data4 += data_s;
-    Serial.println(data4);
+    globalData4 += data_s;
+    Serial.println(globalData4);
 
+}
+
+//////////////////////////////mainLOOP////////////////////////////////
+void loop() {
+  //  if (dirty) {
+  if (1) {
+    readAllSensors();
+    buildDataString();
     bool tcpOpenFailed = false;
     int count_down = 100;
     while ( !open_tcp() && count_down ) {
@@ -512,10 +506,10 @@ void loop() {
         delay(500);
       }
       if (count_down) {
-        tcp.println(data1);
-        tcp.println(data2);
-        tcp.println(data3);
-        tcp.print(data4);
+        tcp.println(globalData1);
+        tcp.println(globalData2);
+        tcp.println(globalData3);
+        tcp.print(globalData4);
         tcp.StopSend();
 
         Serial.println(millis() / 1000);
@@ -531,11 +525,11 @@ void loop() {
     }
 
     // writeSleep to STM
-    Serial2.write(stmTime);
+    Serial2.write(stmSleepTimeS);
     delay(1000);
-    Serial2.write(stmTime);
+    Serial2.write(stmSleepTimeS);
     delay(1000);
-    Serial2.write(stmTime);
+    Serial2.write(stmSleepTimeS);
     delay(1000);
 
     dirty = false;
