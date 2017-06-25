@@ -40,9 +40,6 @@ UC_FILE file;
 
 CMMC_Interval interval2;
 
-// JSON
-StaticJsonBuffer<200> jsonBuffer;
-
 #define SHOW_RAM 1
 #define DEBUG_SERIAL 1
 
@@ -63,8 +60,6 @@ StaticJsonBuffer<200> jsonBuffer;
 
 #define LED 13
 #define MODE_PIN A4
-#define SS_pin                A5
-
 
 #define ECHO  5
 #define TRIG  7
@@ -226,7 +221,6 @@ void setup()  {
   Serial.println(freeMemory());
 #endif
   pinMode(LED, OUTPUT);
-  pinMode(SS_pin, OUTPUT);
   pinMode(MODE_PIN, INPUT_PULLUP);
   pinMode(ECHO, INPUT);
   pinMode(TRIG, OUTPUT);
@@ -507,6 +501,18 @@ bool closeTCPWithBestEffort() {
 bool writeDataStringToTCPSocket() {
     if (openTCPWithBestEffort()) {
       if (startSendTCPWithBestEffort()) {
+        /*
+      data0,version
+          91:2,2,2,2,2
+      data1:dist,lid,temp,humid,flame
+          91:61.00,0,27.56,52.87,0
+      data2:pitch,roll,pressure,batt
+          91:0.00,0.00,969,621.00
+       data3:sound,mq4,mq9,lux,sleep,millis(),ch4,co
+          91:0.00,0.00,0.00,25,10,60.50,0,0
+       data4:lat,lng,alt
+          91:18.7828670N,098.9788563E,268
+        */
         tcp.println(globalData1);
         tcp.println(globalData2);
         tcp.println(globalData3);
