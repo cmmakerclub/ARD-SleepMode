@@ -16,12 +16,22 @@ Sleep sleep;
 unsigned long sleepTime;
 
 
+
+
+float beginAddressEEP = 0.000f;
 int eeAddress = 0;
+//int eeAddress2 = 10;
+
 struct MyObject {
   uint32_t field1;
   uint32_t field2;
+  uint32_t sleepTimeS;
 };
+
 boolean gpsState = false;
+
+
+
 
 
 #define SEALEVELPRESSURE_HPA (1013.25)
@@ -46,7 +56,7 @@ CMMC_Interval interval2;
 #define USER ""
 #define PASS ""
 
-#define BINID            "90"
+#define BINID            "91"
 //#define APPID            "SmartTrash"
 
 
@@ -115,23 +125,70 @@ void debug(String data) {
 }
 #endif
 
-void readDistance() {
-  digitalWrite(TRIG, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG, HIGH);
-  delayMicroseconds(5);
-  digitalWrite(TRIG, LOW);
 
-  pinMode(ECHO, INPUT);
-  duration = pulseIn(ECHO, HIGH);
 
-  if (_volume <= 20) {
-    _volume = 20;
-  } else if (_volume >= 500) {
-    _volume = 500;
+void setEEProm() {
+  EEPROM.get(eeAddress, beginAddressEEP);
+  Serial.println(beginAddressEEP, 3);
+
+
+  if (beginAddressEEP != 123.456f) {
+    beginAddressEEP = 123.456f;
+    MyObject customVar = {
+      0,
+      0,
+      10
+    };
+    EEPROM.put(eeAddress, beginAddressEEP);
+    eeAddress += sizeof(float);
+    EEPROM.put(eeAddress, customVar);
+  } else {
+    //    MyObject customVar = {
+    //      random(1000),
+    //      random(1000),
+    //      10
+    //    };
+    //    eeAddress += sizeof(float);
+    //    EEPROM.put(eeAddress, customVar);
+
+    eeAddress = sizeof(float);
+
+    MyObject customVar;
+    EEPROM.get(eeAddress, customVar);
+
+    Serial.println("Read custom object from EEPROM: ");
+    Serial.println(customVar.field1);
+    Serial.println(customVar.field2);
+    Serial.println(customVar.sleepTimeS);
   }
 
-  _volume = (duration / 2) / 29.1;
+}
+
+
+void readDistance() {
+  uint32_t sum = 0 ;
+  for (int i = 1; i <= 3; i++) {
+    digitalWrite(TRIG, LOW);
+    delayMicroseconds(2);
+    digitalWrite(TRIG, HIGH);
+    delayMicroseconds(5);
+    digitalWrite(TRIG, LOW);
+
+    pinMode(ECHO, INPUT);
+    duration = pulseIn(ECHO, HIGH);
+
+    if (_volume <= 20) {
+      _volume = 20;
+    } else if (_volume >= 500) {
+      _volume = 500;
+    }
+
+    _volume = (duration / 2) / 29.1;
+    sum += _volume;
+  }
+  _volume = sum / 3;
+  Serial.print("_volume = ");
+  Serial.println(_volume);
 }
 
 
@@ -151,7 +208,7 @@ void setup()  {
   Serial.println(freeMemory());
 #endif
 
-  sleepTime = 1000000; // sleep 3 minute
+
 
   pinMode(LED, OUTPUT);
   pinMode(SS_pin, OUTPUT);
@@ -160,7 +217,13 @@ void setup()  {
   pinMode(TRIG, OUTPUT);
 
 
-  bme.begin();
+
+  setEEProm();
+  sleepTime = 1000000; // sleep 3 minute
+
+
+  bme.begin();  // bme sensor begin
+
 
   int z = 0;
   while (z < 5) {
@@ -288,8 +351,9 @@ void setup()  {
         gps_lat.toFloat() * 10000000,
         gps_lon.toFloat() * 10000000
       };
-      eeAddress += sizeof(uint32_t);
+      eeAddress += sizeof(float);
       EEPROM.put(eeAddress, gpsValue);
+
     }
   }
   else {
@@ -338,11 +402,14 @@ void loop() {
       EEPROM.get(eeAddress, customVar);
       gps_lat = customVar.field1;
       gps_lon = customVar.field2;
+      subTime = customVar.sleepTimeS;
 
       Serial.print("Read EEPROM : ");
       Serial.print(gps_lat);
       Serial.print("  ");
-      Serial.println(gps_lon);
+      Serial.print(gps_lon);
+      Serial.print("  ");
+      Serial.println(subTime);
     }
 
     Serial.println("=== BME ===");
@@ -454,7 +521,7 @@ void loop() {
     delay(1000);
     Serial2.write(stmTime);
     delay(1000);
-    
+
     dirty = false;
     is_data_OK = 0;
 
@@ -467,12 +534,8 @@ void loop() {
 
   Serial.println(F("gsm PowerOff zzZ"));
   gsm.PowerOff();
-  //  delay(60000);
-  //  asm volatile ("  jmp 0");
-
-
   //  sleep.pwrSaveMode();
   sleep.pwrDownMode();
   sleep.sleepDelay(sleepTime); // 300000 = 5 minute
-  //  asm volatile ("  jmp 0");
+  asm volatile ("  jmp 0");
 }
