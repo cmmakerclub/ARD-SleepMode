@@ -8,19 +8,11 @@
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
-
-//#include <AltSoftSerial.h>
-
 #include <Sleep_n0m1.h>
 Sleep sleep;
 unsigned long sleepTime;
-
-
-
-
 float beginAddressEEP = 0.000f;
 int eeAddress = 0;
-//int eeAddress2 = 10;
 
 struct MyObject {
   uint32_t field1;
@@ -30,15 +22,10 @@ struct MyObject {
 
 boolean gpsState = false;
 
-
-
-
-
 #define SEALEVELPRESSURE_HPA (1013.25)
 Adafruit_BME280 bme; // I2C
 
 GNSS gps;
-
 INTERNET net;
 TCP tcp;
 
@@ -125,8 +112,6 @@ void debug(String data) {
 }
 #endif
 
-
-
 void setEEProm() {
   EEPROM.get(eeAddress, beginAddressEEP);
   Serial.println(beginAddressEEP, 3);
@@ -161,7 +146,6 @@ void setEEProm() {
     Serial.println(customVar.field2);
     Serial.println(customVar.sleepTimeS);
   }
-
 }
 
 
@@ -207,23 +191,15 @@ void setup()  {
   Serial.print(F("freeMemory()="));
   Serial.println(freeMemory());
 #endif
-
-
-
   pinMode(LED, OUTPUT);
   pinMode(SS_pin, OUTPUT);
   pinMode(MODE_PIN, INPUT_PULLUP);
   pinMode(ECHO, INPUT);
   pinMode(TRIG, OUTPUT);
 
-
-
   setEEProm();
   sleepTime = 1000000; // sleep 3 minute
-
-
   bme.begin();  // bme sensor begin
-
 
   int z = 0;
   while (z < 5) {
@@ -363,8 +339,7 @@ void setup()  {
 
 }
 
-bool open_tcp()
-{
+bool open_tcp() {
   Serial.println();
   // bool ret = tcp.Open("sock.traffy.xyz","10777");
   //  bool ret = tcp.Open("api.traffy.xyz", "10777");
@@ -377,16 +352,12 @@ bool dirty = false;
 static uint32_t nextTick;
 
 
-
-
 //////////////////////////////mainLOOP////////////////////////////////
 void loop() {
-
   float mq4_co, mq9_ch4;
 
   //  if (dirty) {
   if (1) {
-
     _temp = bme.readTemperature();
     _humid = bme.readHumidity();
     _press = bme.readPressure() / 100.0F;
@@ -423,10 +394,7 @@ void loop() {
     Serial.print(_batt);
     Serial.print(" D = ");
     Serial.println(_volume);
-
-
     Serial.println(millis() / 1000);
-
 
     digitalWrite(LED, HIGH);
 #if DEBUG_SERIAL
@@ -441,18 +409,14 @@ void loop() {
 #if DEBUG_SERIAL
     Serial.println(data1);
 #endif
-
-
-
+    // DATA2 Preparation
     String data2 = String (BINID ":");
     data_s = String(_pitch) + "," + String(_roll) + "," + String(_press) + "," + String(_batt);
     data2 += data_s;
 #if DEBUG_SERIAL
     Serial.println(data2);
 #endif
-
-
-
+    // DATA3 Preparation
     String data3 = String (BINID ":");
     data_s = String(_soundStatus) + "," + String(mq4_co) + "," +
              String(mq9_ch4) + "," + String(_light) + "," + String(subTime) + "," + String(millis() / 1000.00) + "," +
@@ -462,15 +426,11 @@ void loop() {
 #if DEBUG_SERIAL
     Serial.println(data3);
 #endif
-
-
-
+    // DATA4 Preparation
     String data4 = String (BINID ":");
     data_s = gps_lat + "," + gps_lon + "," + gps_alt;
     data4 += data_s;
     Serial.println(data4);
-
-
 
     bool tcpOpenFailed = false;
     int count_down = 100;
@@ -525,7 +485,6 @@ void loop() {
     dirty = false;
     is_data_OK = 0;
 
-
     Serial.println(F("Sent..."));
   }
 
@@ -536,6 +495,9 @@ void loop() {
   gsm.PowerOff();
   //  sleep.pwrSaveMode();
   sleep.pwrDownMode();
+  // STM Sleep for n seconds
   sleep.sleepDelay(sleepTime); // 300000 = 5 minute
+
+  // Arduino Sleep
   asm volatile ("  jmp 0");
 }
