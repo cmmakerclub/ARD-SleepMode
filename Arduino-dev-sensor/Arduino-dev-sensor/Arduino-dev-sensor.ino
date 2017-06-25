@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <SPI.h>
 #include "TEE_UC20.h"
 #include "internet.h"
 #include "gnss.h"
