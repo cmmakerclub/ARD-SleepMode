@@ -26,11 +26,11 @@ struct EEPROMStructure {
 };
 
 #define SEALEVELPRESSURE_HPA (1013.25)
-// bool ret = tcp.Open("sock.traffy.xyz","10777");
+// bool ret = tcp.Open("sock.traffy.xyz","Connecting to... ");
 //  bool ret = tcp.Open("api.traffy.xyz", "10777");
-// bool ret = tcp.Open("red.cmmc.io","9991");
-#define TCP_SERVER_ENDPOINT "128.199.143.200"
-#define TCP_SERVER_PORT     "10777"
+String TCP_SERVER_ENDPOINT = "128.199.143.200";
+String TCP_SERVER_PORT     = "10777";
+float GPS_TIMEOUT_INT = 5;
 Adafruit_BME280 bme; // I2C
 
 GNSS gps;
@@ -146,7 +146,6 @@ void readDistance() {
 
 String netpieJsonString;
 long getSleepTimeFromNetpie() {
-    http.begin(1);
     Serial.println(F("Send HTTP GET"));
     http.url("http://api.netpie.io/topic/SmartTrash/time?retain&auth=YGO1C5bATVNctTE:wN7khNDXgadngRN5WxMGMc7z0");
     Serial.println(http.get());
@@ -159,8 +158,8 @@ long getSleepTimeFromNetpie() {
     // clear String
     netpieJsonString = "";
     read_file(RAM, "netpie.json");
-    Serial.println("READ FILE JSON");
-    Serial.println(netpieJsonString);
+    // Serial.println("READ FILE JSON");
+    // Serial.println(netpieJsonString);
     DynamicJsonBuffer jsonBuffer;
     JsonArray& root = jsonBuffer.parseArray(netpieJsonString.c_str());
 
@@ -195,8 +194,6 @@ long getSleepTimeFromNetpie() {
   };
 
 //////////////////////////////mainSETUP////////////////////////////////
-bool open_tcp();
-
 void data_out(char data)
 {
   netpieJsonString += String(data);
@@ -286,7 +283,7 @@ void setup()  {
   gps_data = gps.GetNMEA("GGA");
   gpsCounter = 0;
   bool gps_linked = true;
-  uint32_t gpsTimeoutNextTick = millis() + 50 * 1000L ;
+  uint32_t gpsTimeoutNextTick = millis() + GPS_TIMEOUT_INT * 1000L ;
   while ((gps_data.substring(0, 8) == "$GPGGA,," ||
           gps_data.substring(0, 8) == "Please W")) {
     gps_data = gps.GetNMEA("GGA");
@@ -385,14 +382,10 @@ void setup()  {
   }
 
   Serial.println(millis() / 1000);
+  http.begin(1);
 
 }
 
-bool open_tcp() {
-  Serial.println();
-  bool ret = tcp.Open(TCP_SERVER_ENDPOINT, TCP_SERVER_PORT);
-  return ret;
-}
 
 void readAllSensors() {
     _temp = bme.readTemperature();
@@ -461,46 +454,74 @@ void builDataStringForTCPSocket() {
     Serial.println(globalData4);
 }
 
-bool openTCPWithBestEffort() {
-  bool tcpOpenFailed = false;
-  int count_down = 100;
-  while ( !open_tcp() && count_down ) {
-    Serial.println("retry open tcp...");
-    count_down--;
-    delay(1000);
-  }
-  if (count_down == 0) {
-    tcpOpenFailed = true;
-    Serial.println("TCP Open failed...");
-  }
+bool open_tcp() {
+  Serial.println("===========");
+  Serial.println("open_tcp");
+  Serial.println("===========");
+  Serial.println();
 
-  return tcpOpenFailed;
+  Serial.print("Connecting to... ");
+  Serial.print(TCP_SERVER_ENDPOINT);
+  Serial.print(":");
+  Serial.println(TCP_SERVER_PORT);
+  bool ret = tcp.Open(TCP_SERVER_ENDPOINT, TCP_SERVER_PORT);
+  Serial.print("RESULT = ");
+  Serial.println(ret);
+  delay(50);
+  return ret;
 }
 
-bool startSendTCPWithBestEffort() {
-      int count_down = 100;
-      while ( !tcp.StartSend() && count_down ) {
-        Serial.println("retry send");
-        count_down--;
-        delay(500);
-      }
-      return count_down > 0;
-}
+// bool openTCPWithBestEffort() {
+//   Serial.println("===========");
+//   Serial.println("openTCPWithBestEffort");
+//   Serial.println("===========");
+//   Serial.println();
+//   bool tcpOpenFailed = false;
+//   int count_down = 100;
+//   while (!open_tcp()) {
+//     Serial.println(" retry open tcp...");
+//     if (--count_down == 0) {
+//       Serial.print("TCP Open failed... ");
+//       Serial.println("TIMEOUT");
+//       tcpOpenFailed = true;
+//       break;
+//     }
+//     delay(1000);
+//   }
+//   Serial.println("okokok openTCPWithBestEffort");
+//   return tcpOpenFailed;
+// }
 
-bool closeTCPWithBestEffort() {
-    int count_down = 30;
-    while ( !tcp.Close() && count_down ) {
-      count_down--;
-      delay(500);
-      Serial.println("close tcp");
-    }
+// bool startSendTCPWithBestEffort() {
+//     Serial.println("===========");
+//     Serial.println("startSendTCPWithBestEffort");
+//     Serial.println("===========");
+//     Serial.println();
+//     int count_down = 100;
+//     while ( !tcp.StartSend() && count_down ) {
+//       Serial.println("retry send");
+//       count_down--;
+//       delay(500);
+//     }
+//     return count_down > 0;
+// }
 
-    return count_down >0;
-}
+// bool closeTCPWithBestEffort() {
+//     Serial.println("===========");
+//     Serial.println("closeTCPWithBestEffort");
+//     Serial.println("===========");
+//     Serial.println();
+//     int count_down = 30;
+//     while ( !tcp.Close() && count_down ) {
+//       count_down--;
+//       delay(500);
+//       Serial.println("close tcp");
+//     }
+//
+//     return count_down >0;
+// }
 
 bool writeDataStringToTCPSocket() {
-    if (openTCPWithBestEffort()) {
-      if (startSendTCPWithBestEffort()) {
         /*
       data0,version
           91:2,2,2,2,2
@@ -518,9 +539,6 @@ bool writeDataStringToTCPSocket() {
         tcp.println(globalData3);
         tcp.print(globalData4);
         tcp.StopSend();
-        closeTCPWithBestEffort();
-      }
-    }
 }
 
 void sendSleepTimeInSecondToSTM32() {
@@ -553,7 +571,25 @@ void sleepArduino() {
 void loop() {
   readAllSensors();
   builDataStringForTCPSocket();
-  writeDataStringToTCPSocket();
+  while (1) {
+    getSleepTimeFromNetpie();
+    if (open_tcp()) {
+      if (tcp.StartSend()) {
+        writeDataStringToTCPSocket();
+      }
+      while(!tcp.Close()){
+        Serial.println("Closing tcp...");
+      }
+      delay(1000);
+    }
+
+    // if (openTCPWithBestEffort()) {
+    //   // Serial.println("OPEN TCP OK WRITING DATA...");
+    //   // writeDataStringToTCPSocket();
+    // }
+
+    delay(2000);
+  }
   sendSleepTimeInSecondToSTM32();
   sleepArduino();
 }
