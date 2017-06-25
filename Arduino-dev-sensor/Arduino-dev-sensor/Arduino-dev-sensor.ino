@@ -471,56 +471,6 @@ bool open_tcp() {
   return ret;
 }
 
-// bool openTCPWithBestEffort() {
-//   Serial.println("===========");
-//   Serial.println("openTCPWithBestEffort");
-//   Serial.println("===========");
-//   Serial.println();
-//   bool tcpOpenFailed = false;
-//   int count_down = 100;
-//   while (!open_tcp()) {
-//     Serial.println(" retry open tcp...");
-//     if (--count_down == 0) {
-//       Serial.print("TCP Open failed... ");
-//       Serial.println("TIMEOUT");
-//       tcpOpenFailed = true;
-//       break;
-//     }
-//     delay(1000);
-//   }
-//   Serial.println("okokok openTCPWithBestEffort");
-//   return tcpOpenFailed;
-// }
-
-// bool startSendTCPWithBestEffort() {
-//     Serial.println("===========");
-//     Serial.println("startSendTCPWithBestEffort");
-//     Serial.println("===========");
-//     Serial.println();
-//     int count_down = 100;
-//     while ( !tcp.StartSend() && count_down ) {
-//       Serial.println("retry send");
-//       count_down--;
-//       delay(500);
-//     }
-//     return count_down > 0;
-// }
-
-// bool closeTCPWithBestEffort() {
-//     Serial.println("===========");
-//     Serial.println("closeTCPWithBestEffort");
-//     Serial.println("===========");
-//     Serial.println();
-//     int count_down = 30;
-//     while ( !tcp.Close() && count_down ) {
-//       count_down--;
-//       delay(500);
-//       Serial.println("close tcp");
-//     }
-//
-//     return count_down >0;
-// }
-
 bool writeDataStringToTCPSocket() {
         /*
       data0,version
