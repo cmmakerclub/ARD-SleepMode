@@ -87,14 +87,6 @@ StaticJsonBuffer<200> jsonBuffer;
 #define TRIG  7
 long duration;
 
-uint16_t is_data_OK = 0;
-
-// #define RX_buffer_size 255
-#define RX_buffer_size 140
-volatile uint8_t RX_buffer[RX_buffer_size] = {0};
-volatile uint16_t  RX_pointer = 0;
-volatile uint16_t  Decode_pointer = 0;
-volatile uint16_t prev = 0;
 
 volatile char GNSS_data[58] = "";
 String gps_data = "";
@@ -110,9 +102,8 @@ float _tempBME, _humidBME, _pressBME;
 
 uint8_t gpsCounter = 0;
 uint8_t stmTime = 10;
-float subTime = 5;
+float localSleepTime = 5;
 uint32_t machineCycle = 0;
-#include "STM32.h"
 
 #if DEBUG_SERIAL
 void debug(String data) {
@@ -272,14 +263,14 @@ void setup()  {
   }
 
   if (digitalRead(MODE_PIN) == HIGH) {
-    // subTime 1 hour
-    subTime = 60;
+    // localSleepTime 1 hour
+    localSleepTime = 60;
 #if DEBUG_SERIAL
     Serial.println("HIGH");
 #endif
   } else {
-    // subTime 3 minute 3 * 60 = 180
-    subTime = 180 + 1000;
+    // localSleepTime 3 minute 3 * 60 = 180
+    localSleepTime = 180 + 1000;
 #if DEBUG_SERIAL
     Serial.println("LOW");
 #endif
@@ -409,14 +400,14 @@ void setup()  {
 
       // gps_lat = String(eepromCached.lat);
       // gps_lon = String(eepromCached.lng);
-      // subTime = eepromCached.sleepTimeS;
+      // localSleepTime = eepromCached.sleepTimeS;
 
       Serial.print("Read EEPROM : ");
       Serial.print(eepromCached.lat);
       Serial.print("  ");
       Serial.print(eepromCached.lng);
       Serial.print("  ");
-      Serial.println(subTime);
+      Serial.println(localSleepTime);
   }
 
   Serial.println(millis() / 1000);
@@ -432,10 +423,9 @@ bool open_tcp() {
 bool dirty = false;
 static uint32_t nextTick;
 
-
 //////////////////////////////mainLOOP////////////////////////////////
 void loop() {
-  float mq4_co, mq9_ch4;
+  float mq4_co = 0.0, mq9_ch4 = 0.0;
 
   //  if (dirty) {
   if (1) {
@@ -465,7 +455,7 @@ void loop() {
 #if DEBUG_SERIAL
     Serial.print(F("print : "));
 #endif
-    //    _volume++;
+    // _volume++;
     // publish("/" APPID "/gearname/" BINID "/data1", buffer, false);
     String data1 = String (BINID ":");
     String data_s = String(_volume) + "," + String(_lidStatus) + "," + String(_temp) + ","
@@ -484,7 +474,7 @@ void loop() {
     // DATA3 Preparation
     String data3 = String (BINID ":");
     data_s = String(_soundStatus) + "," + String(mq4_co) + "," +
-             String(mq9_ch4) + "," + String(_light) + "," + String(subTime) + "," + String(millis() / 1000.00) + "," +
+             String(mq9_ch4) + "," + String(_light) + "," + String(localSleepTime) + "," + String(millis() / 1000.00) + "," +
              String(_methane) + "," +
              String(_carbon);
     data3 += data_s;
@@ -549,14 +539,10 @@ void loop() {
     delay(1000);
 
     dirty = false;
-    is_data_OK = 0;
-
     Serial.println(F("Sent..."));
   }
 
-
   Serial.println(millis() / 1000);
-
   Serial.println(F("gsm PowerOff zzZ"));
   // Serial.print("sleep for");
   // Serial.print(eepromCached.sleepTimeS);
