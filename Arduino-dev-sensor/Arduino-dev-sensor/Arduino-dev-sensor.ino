@@ -400,10 +400,6 @@ bool open_tcp() {
   return ret;
 }
 
-bool dirty = false;
-static uint32_t nextTick;
-
-
 void readAllSensors() {
     _temp = bme.readTemperature();
     _humid = bme.readHumidity();
@@ -440,8 +436,6 @@ String globalData4;
 
 void builDataStringForTCPSocket() {
     float mq4_co = 0.0, mq9_ch4 = 0.0;
-    // _volume++;
-    // publish("/" APPID "/gearname/" BINID "/globalData1", buffer, false);
     globalData1 = String (BINID ":");
     String data_s = String(_volume) + "," + String(_lidStatus) + "," + String(_temp) + ","
                     + String(_humid) + "," + String(_flameStatus);
@@ -535,7 +529,6 @@ void sendSleepTimeInSecondToSTM32() {
 }
 
 void sleepArduino() {
-  Serial.println(millis() / 1000);
   Serial.println(F("gsm PowerOff zzZ"));
   // Serial.print("sleep for");
   // Serial.print(eepromCached.sleepTimeS);
@@ -548,7 +541,7 @@ void sleepArduino() {
   // sleep.sleepDelay(sleepTime); // 300000 = 5 minute
   Serial.println(millis());
   // Arduino Reset
-  asm volatile ("  jmp 0");   
+  asm volatile ("  jmp 0");
 }
 //////////////////////////////mainLOOP////////////////////////////////
 void loop() {
