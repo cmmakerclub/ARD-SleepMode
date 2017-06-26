@@ -56,7 +56,7 @@ long globalSleepTimeFromNetpieInMemory = 10;
 #define BINID            "91"
 //#define APPID           "SmartTrash"
 
-uint8_t stmSleepTimeS = 10;
+// uint8_t stmSleepTimeS = 10;
 
 #if DEBUG_SERIAL
 void debug(String data) {
@@ -104,7 +104,7 @@ String netpieJsonString;
 long getSleepTimeFromNetpie() {
     Serial.println(F("Send HTTP GET"));
     http.url("http://api.netpie.io/topic/SmartTrash/time?retain&auth=YGO1C5bATVNctTE:wN7khNDXgadngRN5WxMGMc7z0");
-    // Serial.println(http.get());
+    Serial.println(http.get());
     // Serial.println(F("Clear data in RAM"));
     file.Delete(RAM,"*");
     Serial.println(F("Save HTTP Response To RAM"));
@@ -256,7 +256,8 @@ void builDataStringForTCPSocket() {
       #endif
       // DATA2 Preparation
       globalData2 = String (BINID ":");
-      data_s = String(_pitch) + "," + String(_roll) + "," + String(_press) + "," + String(_batt);
+      String _battery_percent = "0";
+      data_s = String(_pitch) + "," + String(_roll) + "," + String(_press) + "," + String(_battery_percent);
       globalData2 += data_s;
       #if DEBUG_SERIAL
           Serial.println(globalData2);
@@ -265,7 +266,7 @@ void builDataStringForTCPSocket() {
     { // DATA3 Preparation
       globalData3 = String (BINID ":");
       data_s = String(_soundStatus) + "," + String(mq4_co) + "," +
-               String(mq9_ch4) + "," + String(_light) + "," + String(stmSleepTimeS) + "," + String(millis() / 1000.00) + "," +
+               String(mq9_ch4) + "," + String(_light) + "," + String(globalSleepTimeFromNetpieInMemory) + "," + String(millis() / 1000.00) + "," +
                String(_methane) + "," +
                String(_carbon);
       globalData3 += data_s;
@@ -325,12 +326,19 @@ bool writeDataStringToTCPSocket() {
 
 void sendSleepTimeInSecondToSTM32() {
   // writeSleep to STM
+
+  uint8_t stmSleepTimeS = globalSleepTimeFromNetpieInMemory;
+  Serial.print("Send stemSleepTimeToSTM");
+  Serial.println(stmSleepTimeS);
   Serial2.write(stmSleepTimeS);
   delay(1000);
   Serial2.write(stmSleepTimeS);
   delay(1000);
   Serial2.write(stmSleepTimeS);
   delay(1000);
+  while(Serial2.available()) {
+    Serial.print(Serial2.read());
+  }
   Serial.println(F("Sent..."));
 }
 
@@ -361,10 +369,24 @@ void sleepArduino() {
   // Arduino Reset
   asm volatile ("  jmp 0");
 }
+
+void sendDataOverTCPSocket() {
+  if (open_tcp()) {
+    if (tcp.StartSend()) {
+      writeDataStringToTCPSocket();
+    }
+    while(!tcp.Close()){
+      Serial.println("Closing tcp...");
+    }
+    delay(1000);
+  }
+}
+
 //////////////////////////////mainLOOP////////////////////////////////
 void loop() {
   // should be realtime mode
-  while (1) {
+  // Serial.print("globalSleepTimeFromNetpieInMemory")
+  while (globalSleepTimeFromNetpieInMemory == 0) {
     readAllSensors();
     builDataStringForTCPSocket();
     long freshSleepTimeFromNetpie = getSleepTimeFromNetpie();
@@ -372,18 +394,15 @@ void loop() {
       Serial.println("GOT NEW SLEEP TIME");
       globalSleepTimeFromNetpieInMemory = freshSleepTimeFromNetpie;
     }
-
-    if (open_tcp()) {
-      if (tcp.StartSend()) {
-        writeDataStringToTCPSocket();
-      }
-      while(!tcp.Close()){
-        Serial.println("Closing tcp...");
-      }
-      delay(1000);
-    }
+    sendDataOverTCPSocket();
     delay(2000);
   }
+  
+  readAllSensors();
+  builDataStringForTCPSocket();
+  sendDataOverTCPSocket();
+
+  Serial.println("Being sleep...");
   sendSleepTimeInSecondToSTM32();
   sleepArduino();
 }
