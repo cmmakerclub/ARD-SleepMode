@@ -7,31 +7,35 @@
 #include "tcp.h"
 #include <EEPROM.h>
 #include <Wire.h>
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BME280.h>
 #include <Sleep_n0m1.h>
 #include "File.h"
 #include "http.h"
 #include <ArduinoJson.h>
+
+
+#define LED 13
+#define MODE_PIN A4
+
+#include "./sensors.hpp"
 
 struct EEPROMStructure {
   double lat;
   double lng;
   uint32_t sleepTimeS;
 };
+
 HTTP http;
 Sleep sleepCtrl;
 float eepromFloatInitializedByte = 0.000f;
 EEPROMStructure globalCachedEEPROM;
 int eeAddress = 0;
 
-#define SEALEVELPRESSURE_HPA (1013.25)
 // bool ret = tcp.Open("sock.traffy.xyz","Connecting to... ");
 //  bool ret = tcp.Open("api.traffy.xyz", "10777");
 String TCP_SERVER_ENDPOINT = "128.199.143.200";
 String TCP_SERVER_PORT     = "10777";
 float GPS_SEARCH_TIMEOUT_S = 10;
-Adafruit_BME280 bme; // I2C
+
 
 GNSS gps;
 INTERNET net;
@@ -55,29 +59,11 @@ long globalSleepTimeFromNetpieInMemory = 10;
 #define BINID            "91"
 //#define APPID           "SmartTrash"
 
-
-//AltSoftSerial mySerial;
-
-#define LED 13
-#define MODE_PIN A4
-
-#define ECHO  5
-#define TRIG  7
-long duration;
-
-
 volatile char GNSS_data[58] = "";
 String gps_data = "";
 String gps_lat = "";
 String gps_lon = "";
 String gps_alt = "";
-
-float _volume, _pitch, _roll, _batt, V_batt;
-float _temp, _humid, _lat, _lon, _alt, _soundStatus;
-uint16_t _lidStatus, _flameStatus, _press, _light, _carbon, _methane;
-int _rssi;
-
-float _tempBME, _humidBME, _pressBME;
 
 uint8_t gpsCounter = 0;
 uint8_t stmSleepTimeS = 10;
@@ -104,44 +90,23 @@ void setEEProm() {
     // write default value to eeprom
     EEPROM.put(eeAddress, defaultEEPROMValue);
     eeAddress += sizeof(EEPROMStructure);
-    globalCachedEEPROM = defaultEEPROMValue;
+
+    // LOAD EEPROM to global cache
+    Serial.println("Initialized EEPROM");
+    Serial.println("LOAD EEPROM to globalCachedEEPROM");
+    EEPROM.get(sizeof(float), globalCachedEEPROM);
+    printEEPROMInformation();
+    delay(1111);
   }
   else /* load EEPROM */ {
     // eeAddress = sizeof(float);
-
     Serial.println("========================");
     Serial.println("LOADING CACHED IN EEPROM");
     Serial.println("========================");
     EEPROM.get(0+sizeof(float), globalCachedEEPROM);
-
-    dumpCachedEEPROM();
+    printEEPROMInformation();
+    delay(1111);
   }
-}
-
-void readDistance() {
-  uint32_t sum = 0 ;
-  for (int i = 1; i <= 3; i++) {
-    digitalWrite(TRIG, LOW);
-    delayMicroseconds(2);
-    digitalWrite(TRIG, HIGH);
-    delayMicroseconds(5);
-    digitalWrite(TRIG, LOW);
-
-    pinMode(ECHO, INPUT);
-    duration = pulseIn(ECHO, HIGH);
-
-    if (_volume <= 20) {
-      _volume = 20;
-    } else if (_volume >= 500) {
-      _volume = 500;
-    }
-
-    _volume = (duration / 2) / 29.1;
-    sum += _volume;
-  }
-  _volume = sum / 3;
-  Serial.print("_volume = ");
-  Serial.println(_volume);
 }
 
 
@@ -160,7 +125,7 @@ long getSleepTimeFromNetpie() {
     netpieJsonString = "";
     read_file(RAM, "netpie.json");
     // Serial.println("READ FILE JSON");
-    // Serial.println(netpieJsonString);
+    Serial.println(netpieJsonString);
     DynamicJsonBuffer jsonBuffer;
     JsonArray& root = jsonBuffer.parseArray(netpieJsonString.c_str());
 
@@ -208,22 +173,19 @@ void setup()  {
   Serial.begin(9600);
   Serial2.begin(9600);  //  serial to stm
 
-  Serial.println(millis() / 1000);
-#if DEBUG_SERIAL
   Serial.println(F("Program Start."));
-#endif
-#if SHOW_RAM
   Serial.print(F("freeMemory()="));
   Serial.println(freeMemory());
-#endif
   pinMode(LED, OUTPUT);
   pinMode(MODE_PIN, INPUT_PULLUP);
+
   pinMode(ECHO, INPUT);
   pinMode(TRIG, OUTPUT);
 
   setEEProm();
   bme.begin();  // bme sensor begin
 
+  // Just blink when program started
   int z = 0;
   while (z < 5) {
     digitalWrite(LED, HIGH);   // turn the LED on (HIGH is the voltage level)
@@ -266,13 +228,10 @@ void setup()  {
   net.Configure(APN, USER, PASS);
   net.Connect();
 
+  Serial.println(F("NET Connected"));
   Serial.println(F("Show My IP"));
   Serial.println(net.GetIP());
-  Serial.println(F("Start HTTP"));
 
-#if DEBUG_SERIAL
-  Serial.println(F("NET Connected"));
-#endif
   globalSleepTimeFromNetpieInMemory = getSleepTimeFromNetpie();
   Serial.print("SLEEP TIME [NETPIE] = ");
   Serial.println(globalSleepTimeFromNetpieInMemory);
@@ -383,36 +342,6 @@ void setup()  {
 
 }
 
-
-void readAllSensors() {
-    _temp = bme.readTemperature();
-    _humid = bme.readHumidity();
-    _press = bme.readPressure() / 100.0F;
-
-    readDistance();
-
-    pinMode(A0, INPUT);
-    _batt = analogRead(A0);
-
-    // Serial.println("=== BME ===");
-    // Serial.print("T = ");
-    // Serial.print(_temp);
-    // Serial.print(" H = ");
-    // Serial.print(_humid);
-    // Serial.print(" P = ");
-    // Serial.print(_press);
-    // Serial.print(" B = ");
-    // Serial.print(_batt);
-    // Serial.print(" D = ");
-    // Serial.println(_volume);
-    // Serial.println(millis() / 1000);
-
-    digitalWrite(LED, HIGH);
-#if DEBUG_SERIAL
-    // Serial.print(F("print : "));
-#endif
-}
-
 String globalData0Version;
 String globalData1;
 String globalData2;
@@ -507,7 +436,7 @@ void sendSleepTimeInSecondToSTM32() {
   Serial.println(F("Sent..."));
 }
 
-void dumpCachedEEPROM() {
+void printEEPROMInformation() {
   Serial.println("====================");
   Serial.println("  CACHED EEPROM  ");
   Serial.println("====================");
