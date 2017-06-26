@@ -30,7 +30,7 @@ struct EEPROMStructure {
 //  bool ret = tcp.Open("api.traffy.xyz", "10777");
 String TCP_SERVER_ENDPOINT = "128.199.143.200";
 String TCP_SERVER_PORT     = "10777";
-float GPS_TIMEOUT_INT = 5;
+float GPS_TIMEOUT_INT = 180;
 Adafruit_BME280 bme; // I2C
 
 GNSS gps;
@@ -83,7 +83,7 @@ uint8_t stmSleepTimeS = 10;
 
 #if DEBUG_SERIAL
 void debug(String data) {
-  Serial.println(data);
+  // Serial.println(data);
 }
 #endif
 
@@ -420,9 +420,13 @@ String globalData1;
 String globalData2;
 String globalData3;
 String globalData4;
+String globalData0Version;
 
 void builDataStringForTCPSocket() {
     float mq4_co = 0.0, mq9_ch4 = 0.0;
+
+    globalData0Version = String (BINID ":");
+    globalData0Version += "2,2,2,2,2";
     globalData1 = String (BINID ":");
     String data_s = String(_volume) + "," + String(_lidStatus) + "," + String(_temp) + ","
                     + String(_humid) + "," + String(_flameStatus);
@@ -471,6 +475,8 @@ bool open_tcp() {
   return ret;
 }
 
+
+
 bool writeDataStringToTCPSocket() {
         /*
       data0,version
@@ -484,6 +490,7 @@ bool writeDataStringToTCPSocket() {
        data4:lat,lng,alt
           91:18.7828670N,098.9788563E,268
         */
+        tcp.println(globalData0Version);
         tcp.println(globalData1);
         tcp.println(globalData2);
         tcp.println(globalData3);
@@ -521,6 +528,7 @@ void sleepArduino() {
 void loop() {
   readAllSensors();
   builDataStringForTCPSocket();
+  // should be realtime mode
   while (1) {
     getSleepTimeFromNetpie();
     if (open_tcp()) {
@@ -532,12 +540,6 @@ void loop() {
       }
       delay(1000);
     }
-
-    // if (openTCPWithBestEffort()) {
-    //   // Serial.println("OPEN TCP OK WRITING DATA...");
-    //   // writeDataStringToTCPSocket();
-    // }
-
     delay(2000);
   }
   sendSleepTimeInSecondToSTM32();
