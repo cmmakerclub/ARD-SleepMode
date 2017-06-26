@@ -244,40 +244,45 @@ String globalData5;
 
 void builDataStringForTCPSocket() {
     float mq4_co = 0.0, mq9_ch4 = 0.0;
-
+    String data_s;
     globalData0Version = String (BINID ":2,2,2,2,2");
-    globalData1 = String (BINID ":");
-    String data_s = String(_volume) + "," + String(_lidStatus) + "," + String(_temp) + ","
-                    + String(_humid) + "," + String(_flameStatus);
-    globalData1 += data_s;
-#if DEBUG_SERIAL
-    Serial.println(globalData1);
-#endif
-    // DATA2 Preparation
-    globalData2 = String (BINID ":");
-    data_s = String(_pitch) + "," + String(_roll) + "," + String(_press) + "," + String(_batt);
-    globalData2 += data_s;
-#if DEBUG_SERIAL
-    Serial.println(globalData2);
-#endif
-    // DATA3 Preparation
-    globalData3 = String (BINID ":");
-    data_s = String(_soundStatus) + "," + String(mq4_co) + "," +
-             String(mq9_ch4) + "," + String(_light) + "," + String(stmSleepTimeS) + "," + String(millis() / 1000.00) + "," +
-             String(_methane) + "," +
-             String(_carbon);
-    globalData3 += data_s;
-#if DEBUG_SERIAL
-    Serial.println(globalData3);
-#endif
-    // DATA4 Preparation
-    globalData4GPS = String (BINID ":");
-    data_s = gps_lat + "," + gps_lon + "," + gps_alt;
-    globalData4GPS += data_s;
-    Serial.println(globalData4GPS);
+    {
+      globalData1 = String (BINID ":");
+     data_s = String(_volume) + "," + String(_lidStatus) + "," + String(_temp) + ","
+                      + String(_humid) + "," + String(_flameStatus);
+      globalData1 += data_s;
+      #if DEBUG_SERIAL
+          Serial.println(globalData1);
+      #endif
+      // DATA2 Preparation
+      globalData2 = String (BINID ":");
+      data_s = String(_pitch) + "," + String(_roll) + "," + String(_press) + "," + String(_batt);
+      globalData2 += data_s;
+      #if DEBUG_SERIAL
+          Serial.println(globalData2);
+      #endif
+    }
+    { // DATA3 Preparation
+      globalData3 = String (BINID ":");
+      data_s = String(_soundStatus) + "," + String(mq4_co) + "," +
+               String(mq9_ch4) + "," + String(_light) + "," + String(stmSleepTimeS) + "," + String(millis() / 1000.00) + "," +
+               String(_methane) + "," +
+               String(_carbon);
+      globalData3 += data_s;
+      #if DEBUG_SERIAL
+          Serial.println(globalData3);
+      #endif
+  }
+  {
+      // DATA4 Preparation
+      globalData4GPS = String (BINID ":");
+      data_s = gps_lat + "," + gps_lon + "," + gps_alt;
+      globalData4GPS += data_s;
+      Serial.println(globalData4GPS);
 
-    // DATA5 Preparation
-    globalData5 = String(BINID ":") + _rssi +"," + _batt;
+      // DATA5 Preparation
+      globalData5 = String(BINID ":") + _rssi +"," + _batt;
+  }
 }
 bool open_tcp() {
   Serial.println("===========");
