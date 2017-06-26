@@ -14,23 +14,23 @@
 #include "http.h"
 #include <ArduinoJson.h>
 
-HTTP http;
-Sleep sleepCtrl;
-float eepromFloatInitializedByte = 0.000f;
-int eeAddress = 0;
-
 struct EEPROMStructure {
   double lat;
   double lng;
   uint32_t sleepTimeS;
 };
+HTTP http;
+Sleep sleepCtrl;
+float eepromFloatInitializedByte = 0.000f;
+EEPROMStructure globalCachedEEPROM;
+int eeAddress = 0;
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 // bool ret = tcp.Open("sock.traffy.xyz","Connecting to... ");
 //  bool ret = tcp.Open("api.traffy.xyz", "10777");
 String TCP_SERVER_ENDPOINT = "128.199.143.200";
 String TCP_SERVER_PORT     = "10777";
-float GPS_TIMEOUT_INT      = 180;
+float GPS_SEARCH_TIMEOUT_S = 10;
 Adafruit_BME280 bme; // I2C
 
 GNSS gps;
@@ -38,7 +38,7 @@ INTERNET net;
 TCP tcp;
 UC_FILE file;
 
-CMMC_Interval interval2;
+long globalSleepTimeFromNetpieInMemory = 10;
 
 #define SHOW_RAM 1
 #define DEBUG_SERIAL 1
@@ -104,19 +104,19 @@ void setEEProm() {
     // write default value to eeprom
     EEPROM.put(eeAddress, defaultEEPROMValue);
     eeAddress += sizeof(EEPROMStructure);
+    globalCachedEEPROM = defaultEEPROMValue;
   }
-  // load eeprom
-  else {
+  else /* load EEPROM */ {
     // eeAddress = sizeof(float);
-    EEPROMStructure eepromCached;
-    EEPROM.get(0+sizeof(float), eepromCached);
-    Serial.println("Read custom object from EEPROM: ");
-    Serial.println(eepromCached.lat);
-    Serial.println(eepromCached.lng);
-    Serial.println(eepromCached.sleepTimeS);
+
+    Serial.println("========================");
+    Serial.println("LOADING CACHED IN EEPROM");
+    Serial.println("========================");
+    EEPROM.get(0+sizeof(float), globalCachedEEPROM);
+
+    dumpCachedEEPROM();
   }
 }
-
 
 void readDistance() {
   uint32_t sum = 0 ;
@@ -149,12 +149,12 @@ String netpieJsonString;
 long getSleepTimeFromNetpie() {
     Serial.println(F("Send HTTP GET"));
     http.url("http://api.netpie.io/topic/SmartTrash/time?retain&auth=YGO1C5bATVNctTE:wN7khNDXgadngRN5WxMGMc7z0");
-    Serial.println(http.get());
-    Serial.println(F("Clear data in RAM"));
+    // Serial.println(http.get());
+    // Serial.println(F("Clear data in RAM"));
     file.Delete(RAM,"*");
     Serial.println(F("Save HTTP Response To RAM"));
     http.SaveResponseToMemory(RAM,"netpie.json");
-    Serial.println(F("Read data in RAM"));
+    // Serial.println(F("Read data in RAM"));
 
     // clear String
     netpieJsonString = "";
@@ -170,24 +170,24 @@ long getSleepTimeFromNetpie() {
       return;
     }
     else {
-      Serial.println("parsed OK.");
+      // Serial.println("parsed OK.");
       JsonObject& netpieJsonObject = root[0];
-      Serial.print("TIME PAYLOAD: ");
+      // Serial.print("TIME PAYLOAD: ");
       const char* payload = netpieJsonObject["payload"];
       const char* topic = netpieJsonObject["topic"];
       const char* lastUpdated = netpieJsonObject["lastUpdated"];
       long payloadInt = String(payload).toInt();
-      Serial.print("payload: ");
-      Serial.println(payload);
-
+      // Serial.print("payload: ");
+      // Serial.println(payload);
+      //
       Serial.print("payloadInt: ");
       Serial.println(payloadInt);
-
-      Serial.print("topic: ");
-      Serial.println(topic);
-
-      Serial.print("lastUpdated: ");
-      Serial.println(lastUpdated);
+      //
+      // Serial.print("topic: ");
+      // Serial.println(topic);
+      //
+      // Serial.print("lastUpdated: ");
+      // Serial.println(lastUpdated);
       return payloadInt;
     }
   };
@@ -273,16 +273,19 @@ void setup()  {
 #if DEBUG_SERIAL
   Serial.println(F("NET Connected"));
 #endif
-  long sleepTimeFromNetpie = getSleepTimeFromNetpie();
+  globalSleepTimeFromNetpieInMemory = getSleepTimeFromNetpie();
   Serial.print("SLEEP TIME [NETPIE] = ");
-  Serial.println(sleepTimeFromNetpie);
+  Serial.println(globalSleepTimeFromNetpieInMemory);
+
   //////////////////////////////GPS//////////////////////////////
   gps.Start();
   gps.EnableNMEA();
   gps_data = gps.GetNMEA("GGA");
   gpsCounter = 0;
   bool gps_linked = true;
-  uint32_t gpsTimeoutNextTick = millis() + GPS_TIMEOUT_INT * 1000L ;
+  uint32_t gpsTimeoutNextTick = millis() + GPS_SEARCH_TIMEOUT_S*1000L;
+  Serial.print("GPS TIMEOUT NEXTICK = ");
+  Serial.println(gpsTimeoutNextTick);
   while ((gps_data.substring(0, 8) == "$GPGGA,," ||
           gps_data.substring(0, 8) == "Please W")) {
     gps_data = gps.GetNMEA("GGA");
@@ -365,18 +368,13 @@ void setup()  {
   }
   else {
       // NO GPS LINK: LOAD LAT, LNG from EEPROM
-      uint32_t eeAddress = sizeof(eepromFloatInitializedByte);
-      EEPROMStructure eepromCached;
-      EEPROM.get(0+eeAddress, eepromCached);
+      // gps_lat = String(globalCachedEEPROM.lat);
+      // gps_lon = String(globalCachedEEPROM.lng);
+      // localSleepTime = globalCachedEEPROM.sleepTimeS;
 
-      // gps_lat = String(eepromCached.lat);
-      // gps_lon = String(eepromCached.lng);
-      // localSleepTime = eepromCached.sleepTimeS;
-
-      Serial.print("Read EEPROM : ");
-      Serial.print(eepromCached.lat);
+      Serial.print(globalCachedEEPROM.lat);
       Serial.print("  ");
-      Serial.print(eepromCached.lng);
+      Serial.print(globalCachedEEPROM.lng);
       Serial.print("  ");
   }
 
@@ -396,18 +394,18 @@ void readAllSensors() {
     pinMode(A0, INPUT);
     _batt = analogRead(A0);
 
-    Serial.println("=== BME ===");
-    Serial.print("T = ");
-    Serial.print(_temp);
-    Serial.print(" H = ");
-    Serial.print(_humid);
-    Serial.print(" P = ");
-    Serial.print(_press);
-    Serial.print(" B = ");
-    Serial.print(_batt);
-    Serial.print(" D = ");
-    Serial.println(_volume);
-    Serial.println(millis() / 1000);
+    // Serial.println("=== BME ===");
+    // Serial.print("T = ");
+    // Serial.print(_temp);
+    // Serial.print(" H = ");
+    // Serial.print(_humid);
+    // Serial.print(" P = ");
+    // Serial.print(_press);
+    // Serial.print(" B = ");
+    // Serial.print(_batt);
+    // Serial.print(" D = ");
+    // Serial.println(_volume);
+    // Serial.println(millis() / 1000);
 
     digitalWrite(LED, HIGH);
 #if DEBUG_SERIAL
@@ -415,18 +413,17 @@ void readAllSensors() {
 #endif
 }
 
+String globalData0Version;
 String globalData1;
 String globalData2;
 String globalData3;
 String globalData4GPS;
 String globalData5;
-String globalData0Version;
 
 void builDataStringForTCPSocket() {
     float mq4_co = 0.0, mq9_ch4 = 0.0;
 
-    globalData0Version = String (BINID ":");
-    globalData0Version += "2,2,2,2,2";
+    globalData0Version = String (BINID ":2,2,2,2,2");
     globalData1 = String (BINID ":");
     String data_s = String(_volume) + "," + String(_lidStatus) + "," + String(_temp) + ","
                     + String(_humid) + "," + String(_flameStatus);
@@ -458,7 +455,8 @@ void builDataStringForTCPSocket() {
     Serial.println(globalData4GPS);
 
     // DATA5 Preparation
-    globalData5 = String(BINID ":") + _rssi; }
+    globalData5 = String(BINID ":") + _rssi +"," + _batt;
+}
 bool open_tcp() {
   Serial.println("===========");
   Serial.println("open_tcp");
@@ -509,11 +507,23 @@ void sendSleepTimeInSecondToSTM32() {
   Serial.println(F("Sent..."));
 }
 
+void dumpCachedEEPROM() {
+  Serial.println("====================");
+  Serial.println("  CACHED EEPROM  ");
+  Serial.println("====================");
+  Serial.print("globalCachedEEPROM.lat= ");
+  Serial.println(globalCachedEEPROM.lat);
+  Serial.print("globalCachedEEPROM.lng= ");
+  Serial.println(globalCachedEEPROM.lng);
+  Serial.print("globalCachedEEPROM.sleepTimeS = ");
+  Serial.println(globalCachedEEPROM.sleepTimeS);
+  Serial.println("====================");
+  Serial.println("====================");
+}
+
 void sleepArduino() {
   Serial.println(F("gsm PowerOff zzZ"));
   // Serial.print("sleep for");
-  // Serial.print(eepromCached.sleepTimeS);
-
   gsm.PowerOff();
   //  sleep.pwrSaveMode();
   sleepCtrl.pwrDownMode();
@@ -530,7 +540,12 @@ void loop() {
   while (1) {
     readAllSensors();
     builDataStringForTCPSocket();
-    getSleepTimeFromNetpie();
+    long freshSleepTimeFromNetpie = getSleepTimeFromNetpie();
+    if (globalSleepTimeFromNetpieInMemory != freshSleepTimeFromNetpie) {
+      Serial.println("GOT NEW SLEEP TIME");
+      globalSleepTimeFromNetpieInMemory = freshSleepTimeFromNetpie;
+    }
+
     if (open_tcp()) {
       if (tcp.StartSend()) {
         writeDataStringToTCPSocket();
