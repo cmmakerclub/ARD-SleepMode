@@ -2,7 +2,7 @@
 #include "gnss.h"
 
 GNSS gps;
-float GPS_SEARCH_TIMEOUT_S = 10;
+float GPS_SEARCH_TIMEOUT_S = 60;
 extern uint8_t LED;
 
 // volatile char GNSS_data[58] = "";
@@ -11,7 +11,8 @@ String gps_data = "";
 String gps_lat = "";
 String gps_lon = "";
 String gps_alt = "";
-uint8_t gpsCounter = 0;
+uint32_t gpsCounter = 0;
+bool gotGPSLocation = true;
 
 void convertGPSRawDataToLatLng() {
     if (gps_data.substring(0, 6) == "$GPGGA") {
@@ -59,7 +60,6 @@ void startGPSService() {
   gps_data = gps.GetNMEA("GGA");
   gpsCounter = 0;
   // assume got gps unless searching timeout.
-  bool gps_linked = true;
   uint32_t gpsTimeoutNextTick = millis() + GPS_SEARCH_TIMEOUT_S*1000L;
   Serial.print("GPS TIMEOUT NEXTICK = ");
   Serial.println(gpsTimeoutNextTick);
@@ -78,7 +78,7 @@ void startGPSService() {
     gpsCounter += 1;
     if (gpsCounter%10 == 0) {
       Serial.print(gpsCounter);
-      Serial.println(" Wating GPS...");
+      Serial.println(" Waiting GPS...");
     }
 
     // gps timeout
@@ -87,14 +87,14 @@ void startGPSService() {
       gps_lat = "0.0";
       gps_lon = "0.0";
       gps_alt = "0.0";
-      gps_linked = false;
+      gotGPSLocation = false;
       break;
     }
   }
 
   // action after finish GPS searching...
   delay(1111);
-  if (gps_linked) {
+  if (gotGPSLocation) {
     Serial.println("FOUND GPS....");
     Serial.println("COVERTING to Coordinate....");
     convertGPSRawDataToLatLng();

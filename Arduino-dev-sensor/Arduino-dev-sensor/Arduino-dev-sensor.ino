@@ -30,6 +30,7 @@ float eepromFloatInitializedByte = 0.000f;
 EEPROMStructure globalCachedEEPROM;
 int eeAddress = 0;
 
+extern bool gotGPSLocation;
 // bool ret = tcp.Open("sock.traffy.xyz","Connecting to... ");
 //  bool ret = tcp.Open("api.traffy.xyz", "10777");
 String TCP_SERVER_ENDPOINT = "128.199.143.200";
@@ -214,13 +215,30 @@ void setup()  {
   Serial.println(gsm.SignalQuality());
 
   Serial.println(F("Disconnect net"));
-  net.DisConnect();
+  bool netDisConnectStatus = net.DisConnect();
+  Serial.print("netDisconnect Status = ");
+  Serial.println(netDisConnectStatus);
+  if (netDisConnectStatus) {
+    Serial.println("NET DISCONNECTED OK.");
+  }
+  else {
+    Serial.println("NET DISCONNECTED FAILED.");
+  }
   net.Configure(APN, USER, PASS);
-  net.Connect();
+  bool netConnectStatus = net.Connect();
+  Serial.print("netConnectStatus = ");
+  Serial.println(netConnectStatus);
+  if (netConnectStatus == 0) {
+    Serial.println("net.Connect failed.");
+    // asm volatile ("  jmp 0");
+  }
+  else {
+    Serial.println(F("NET Connected"));
+  }
 
-  Serial.println(F("NET Connected"));
   Serial.println(F("Show My IP"));
   Serial.println(net.GetIP());
+
 
   globalSleepTimeFromNetpieInMemory = getSleepTimeFromNetpie();
   Serial.print("SLEEP TIME [NETPIE] = ");
@@ -266,7 +284,7 @@ void builDataStringForTCPSocket() {
     { // DATA3 Preparation
       globalData3 = String (BINID ":");
       data_s = String(_soundStatus) + "," + String(mq4_co) + "," +
-               String(mq9_ch4) + "," + String(_light) + "," + String(globalSleepTimeFromNetpieInMemory) + "," + String(millis() / 1000.00) + "," +
+               String(mq9_ch4) + "," + String(_light) + "," + String(globalSleepTimeFromNetpieInMemory*60) + "," + String(millis() / 1000.00) + "," +
                String(_methane) + "," +
                String(_carbon);
       globalData3 += data_s;
@@ -283,6 +301,7 @@ void builDataStringForTCPSocket() {
 
       // DATA5 Preparation
       globalData5 = String(BINID ":") + _rssi +"," + _batt;
+      Serial.println(globalData5);
   }
 }
 bool open_tcp() {
@@ -326,8 +345,9 @@ bool writeDataStringToTCPSocket() {
 
 void sendSleepTimeInSecondToSTM32InS(uint8_t stmSleepTimeS) {
   // writeSleep to STM
-  Serial.print("Send stemSleepTimeToSTM");
+  Serial.print("Send stemSleepTimeToSTM => ");
   Serial.println(stmSleepTimeS);
+
   Serial2.write(stmSleepTimeS);
   delay(1000);
   Serial2.write(stmSleepTimeS);
@@ -335,7 +355,7 @@ void sendSleepTimeInSecondToSTM32InS(uint8_t stmSleepTimeS) {
   Serial2.write(stmSleepTimeS);
   delay(1000);
   while(Serial2.available()) {
-    Serial.print(Serial2.read());
+    Serial.println(Serial2.read());
   }
   Serial.println(F("Sent..."));
 }
@@ -395,7 +415,10 @@ void loop() {
       globalSleepTimeFromNetpieInMemory = freshSleepTimeFromNetpie;
     }
     sendDataOverTCPSocket();
-    delay(2000);
+    if (gotGPSLocation == false) {
+      startGPSService();
+    }
+    delay(10*1000);
   }
 
   readAllSensors();
@@ -403,6 +426,7 @@ void loop() {
   sendDataOverTCPSocket();
 
   Serial.println("Being sleep...");
-  sendSleepTimeInSecondToSTM32InS(globalSleepTimeFromNetpieInMemory);
+  // TODO: must multiply by 60
+  sendSleepTimeInSecondToSTM32InS(globalSleepTimeFromNetpieInMemory/60);
   sleepArduino(globalSleepTimeFromNetpieInMemory * 1000L);
 }
