@@ -2,7 +2,6 @@
 #include <SPI.h>
 #include "TEE_UC20.h"
 #include "internet.h"
-#include "gnss.h"
 #include "CMMC_Interval.hpp"
 #include "tcp.h"
 #include <EEPROM.h>
@@ -13,10 +12,11 @@
 #include <ArduinoJson.h>
 
 
-#define LED 13
+uint8_t LED = 13;
 #define MODE_PIN A4
 
 #include "./sensors.hpp"
+#include "gps.hpp"
 
 struct EEPROMStructure {
   double lat;
@@ -34,10 +34,7 @@ int eeAddress = 0;
 //  bool ret = tcp.Open("api.traffy.xyz", "10777");
 String TCP_SERVER_ENDPOINT = "128.199.143.200";
 String TCP_SERVER_PORT     = "10777";
-float GPS_SEARCH_TIMEOUT_S = 10;
 
-
-GNSS gps;
 INTERNET net;
 TCP tcp;
 UC_FILE file;
@@ -59,13 +56,6 @@ long globalSleepTimeFromNetpieInMemory = 10;
 #define BINID            "91"
 //#define APPID           "SmartTrash"
 
-volatile char GNSS_data[58] = "";
-String gps_data = "";
-String gps_lat = "";
-String gps_lon = "";
-String gps_alt = "";
-
-uint8_t gpsCounter = 0;
 uint8_t stmSleepTimeS = 10;
 
 #if DEBUG_SERIAL
@@ -237,105 +227,10 @@ void setup()  {
   Serial.println(globalSleepTimeFromNetpieInMemory);
 
   //////////////////////////////GPS//////////////////////////////
-  gps.Start();
-  gps.EnableNMEA();
-  gps_data = gps.GetNMEA("GGA");
-  gpsCounter = 0;
-  bool gps_linked = true;
-  uint32_t gpsTimeoutNextTick = millis() + GPS_SEARCH_TIMEOUT_S*1000L;
-  Serial.print("GPS TIMEOUT NEXTICK = ");
-  Serial.println(gpsTimeoutNextTick);
-  while ((gps_data.substring(0, 8) == "$GPGGA,," ||
-          gps_data.substring(0, 8) == "Please W")) {
-    gps_data = gps.GetNMEA("GGA");
 
-    // Serial.print("GNSS_data = ");
-    // Serial.println(gps_data);
+  startGPSService();
 
-    digitalWrite(LED, HIGH);
-    delay(5);
-    digitalWrite(LED, LOW);
-    delay(100);
 
-    gpsCounter += 1;
-    if (gpsCounter%10 == 0) {
-      Serial.print(gpsCounter);
-      Serial.println(" Wating GPS...");
-    }
-
-    // gps timeout
-    if (millis() > gpsTimeoutNextTick) {
-      Serial.println("GPS Timeout..");
-      gps_lat = "0.0";
-      gps_lon = "0.0";
-      gps_alt = "0.0";
-      gps_linked = false;
-      break;
-    }
-  }
-
-  // action after finish GPS searching...
-  if (gps_linked) {
-    if (gps_data.substring(0, 6) == "$GPGGA") {
-      gps_data.toCharArray(GNSS_data, 58);
-
-      String gps_cal_s = gps_data.substring(18, 27);
-      float gps_cal_f = gps_cal_s.toFloat();
-      gps_cal_f /= 60.0f;
-      uint32_t gps_cal_l = gps_cal_f * 10000000;
-
-      gps_lat += GNSS_data[16] ;
-      gps_lat += GNSS_data[17] ;
-      gps_lat += ".";
-      gps_lat += gps_cal_l;
-      gps_lat += GNSS_data[28] ;
-
-      gps_cal_s = gps_data.substring(33, 42);
-      gps_cal_f = gps_cal_s.toFloat();
-      gps_cal_f /= 60.0f;
-      gps_cal_l = gps_cal_f * 10000000;
-
-      gps_lon += GNSS_data[30] ;
-      gps_lon += GNSS_data[31] ;
-      gps_lon += GNSS_data[32] ;
-      gps_lon += ".";
-      gps_lon += gps_cal_l;
-      gps_lon += GNSS_data[43] ;
-
-      gps_alt += GNSS_data[54];
-      gps_alt += GNSS_data[55];
-      gps_alt += GNSS_data[56];
-      // gps_alt += GNSS_data[57];
-      // gps_alt += GNSS_data[58];
-
-      Serial.println(F("Stop GPS"));
-      gps.Stop();
-      gps.DisableNMEA();
-
-      // cache GPS Information
-      // EEPROMStructure gpsValue = { gps_lat.toDouble(), gps_lon.toDouble() };
-      // eeAddress += sizeof(eepromFloatInitializedByte);
-      // EEPROM.put(eeAddress, gpsValue);
-      // Serial.println("update GPS cache...");
-      // Serial.print(gpsValue.lat);
-      // Serial.print(F("  "));
-      // Serial.print(gpsValue.lng);
-      // Serial.print(F("  "));
-      // Serial.println(gps_alt);
-      delay(1000);
-    }
-  }
-  else {
-      // NO GPS LINK: LOAD LAT, LNG from EEPROM
-      // gps_lat = String(globalCachedEEPROM.lat);
-      // gps_lon = String(globalCachedEEPROM.lng);
-      // localSleepTime = globalCachedEEPROM.sleepTimeS;
-
-      Serial.print(globalCachedEEPROM.lat);
-      Serial.print("  ");
-      Serial.print(globalCachedEEPROM.lng);
-      Serial.print("  ");
-  }
 
   Serial.println(millis() / 1000);
   http.begin(1);

@@ -14,6 +14,7 @@ float _tempBME, _humidBME, _pressBME;
 
 #define ECHO  5
 #define TRIG  7
+extern uint8_t LED;
 long duration;
 
 void readDistance() {
