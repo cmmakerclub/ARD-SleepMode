@@ -30,7 +30,7 @@ struct EEPROMStructure {
 //  bool ret = tcp.Open("api.traffy.xyz", "10777");
 String TCP_SERVER_ENDPOINT = "128.199.143.200";
 String TCP_SERVER_PORT     = "10777";
-float GPS_TIMEOUT_INT = 180;
+float GPS_TIMEOUT_INT      = 180;
 Adafruit_BME280 bme; // I2C
 
 GNSS gps;
@@ -75,6 +75,7 @@ String gps_alt = "";
 float _volume, _pitch, _roll, _batt, V_batt;
 float _temp, _humid, _lat, _lon, _alt, _soundStatus;
 uint16_t _lidStatus, _flameStatus, _press, _light, _carbon, _methane;
+int _rssi;
 
 float _tempBME, _humidBME, _pressBME;
 
@@ -176,8 +177,6 @@ long getSleepTimeFromNetpie() {
       const char* topic = netpieJsonObject["topic"];
       const char* lastUpdated = netpieJsonObject["lastUpdated"];
       long payloadInt = String(payload).toInt();
-
-
       Serial.print("payload: ");
       Serial.println(payload);
 
@@ -259,7 +258,7 @@ void setup()  {
   Serial.print(F("GetOperator --> "));
   Serial.println(gsm.GetOperator());
   Serial.print(F("SignalQuality --> "));
-  _light = gsm.SignalQuality();
+  _rssi= gsm.SignalQuality();
   Serial.println(gsm.SignalQuality());
 
   Serial.println(F("Disconnect net"));
@@ -419,7 +418,8 @@ void readAllSensors() {
 String globalData1;
 String globalData2;
 String globalData3;
-String globalData4;
+String globalData4GPS;
+String globalData5;
 String globalData0Version;
 
 void builDataStringForTCPSocket() {
@@ -452,22 +452,21 @@ void builDataStringForTCPSocket() {
     Serial.println(globalData3);
 #endif
     // DATA4 Preparation
-    globalData4 = String (BINID ":");
+    globalData4GPS = String (BINID ":");
     data_s = gps_lat + "," + gps_lon + "," + gps_alt;
-    globalData4 += data_s;
-    Serial.println(globalData4);
-}
+    globalData4GPS += data_s;
+    Serial.println(globalData4GPS);
 
+    // DATA5 Preparation
+    globalData5 = String(BINID ":") + _rssi; }
 bool open_tcp() {
   Serial.println("===========");
   Serial.println("open_tcp");
-  Serial.println("===========");
-  Serial.println();
-
   Serial.print("Connecting to... ");
   Serial.print(TCP_SERVER_ENDPOINT);
   Serial.print(":");
   Serial.println(TCP_SERVER_PORT);
+  Serial.println("===========");
   bool ret = tcp.Open(TCP_SERVER_ENDPOINT, TCP_SERVER_PORT);
   Serial.print("RESULT = ");
   Serial.println(ret);
@@ -494,7 +493,8 @@ bool writeDataStringToTCPSocket() {
         tcp.println(globalData1);
         tcp.println(globalData2);
         tcp.println(globalData3);
-        tcp.print(globalData4);
+        tcp.println(globalData4GPS);
+        tcp.print(globalData5);
         tcp.StopSend();
 }
 
@@ -526,10 +526,10 @@ void sleepArduino() {
 }
 //////////////////////////////mainLOOP////////////////////////////////
 void loop() {
-  readAllSensors();
-  builDataStringForTCPSocket();
   // should be realtime mode
   while (1) {
+    readAllSensors();
+    builDataStringForTCPSocket();
     getSleepTimeFromNetpie();
     if (open_tcp()) {
       if (tcp.StartSend()) {
