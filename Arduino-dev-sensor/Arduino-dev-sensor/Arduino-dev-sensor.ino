@@ -324,10 +324,8 @@ bool writeDataStringToTCPSocket() {
         tcp.StopSend();
 }
 
-void sendSleepTimeInSecondToSTM32() {
+void sendSleepTimeInSecondToSTM32InS(uint8_t stmSleepTimeS) {
   // writeSleep to STM
-
-  uint8_t stmSleepTimeS = globalSleepTimeFromNetpieInMemory;
   Serial.print("Send stemSleepTimeToSTM");
   Serial.println(stmSleepTimeS);
   Serial2.write(stmSleepTimeS);
@@ -356,16 +354,17 @@ void printEEPROMInformation() {
   Serial.println("====================");
 }
 
-void sleepArduino() {
+void sleepArduino(uint32_t sleepTimeInMs) {
   Serial.println(F("gsm PowerOff zzZ"));
   // Serial.print("sleep for");
   gsm.PowerOff();
   //  sleep.pwrSaveMode();
   sleepCtrl.pwrDownMode();
   // STM Sleep for n seconds
+  Serial.print("Being sleep for ..");
+  Serial.println(sleepTimeInMs);
   Serial.println(millis());
-  // sleep.sleepDelay(sleepTime); // 300000 = 5 minute
-  Serial.println(millis());
+  sleepCtrl.sleepDelay(sleepTimeInMs); // in MS
   // Arduino Reset
   asm volatile ("  jmp 0");
 }
@@ -377,6 +376,7 @@ void sendDataOverTCPSocket() {
     }
     while(!tcp.Close()){
       Serial.println("Closing tcp...");
+      delay(10);
     }
     delay(1000);
   }
@@ -397,12 +397,12 @@ void loop() {
     sendDataOverTCPSocket();
     delay(2000);
   }
-  
+
   readAllSensors();
   builDataStringForTCPSocket();
   sendDataOverTCPSocket();
 
   Serial.println("Being sleep...");
-  sendSleepTimeInSecondToSTM32();
-  sleepArduino();
+  sendSleepTimeInSecondToSTM32InS(globalSleepTimeFromNetpieInMemory);
+  sleepArduino(globalSleepTimeFromNetpieInMemory * 1000L);
 }
