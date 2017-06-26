@@ -230,8 +230,6 @@ void setup()  {
 
   startGPSService();
 
-
-
   Serial.println(millis() / 1000);
   http.begin(1);
 
