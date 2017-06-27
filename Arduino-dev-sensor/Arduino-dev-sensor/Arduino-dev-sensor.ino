@@ -11,7 +11,7 @@
 #include "http.h"
 #include <ArduinoJson.h>
 
-
+#define BINID     "103"
 uint8_t LED = 13;
 #define MODE_PIN A4
 
@@ -31,6 +31,7 @@ EEPROMStructure globalCachedEEPROM;
 int eeAddress = 0;
 
 extern bool gotGPSLocation;
+
 // bool ret = tcp.Open("sock.traffy.xyz","Connecting to... ");
 //  bool ret = tcp.Open("api.traffy.xyz", "10777");
 String TCP_SERVER_ENDPOINT = "128.199.143.200";
@@ -40,7 +41,7 @@ INTERNET net;
 TCP tcp;
 UC_FILE file;
 
-long globalSleepTimeFromNetpieInMemory = 10;
+long globalSleepTimeFromNetpieInMemory = 3;
 
 #define SHOW_RAM 1
 #define DEBUG_SERIAL 1
@@ -54,14 +55,13 @@ long globalSleepTimeFromNetpieInMemory = 10;
 #define USER ""
 #define PASS ""
 
-#define BINID            "91"
 //#define APPID           "SmartTrash"
 
-// uint8_t stmSleepTimeS = 10;
+// uint8_t stmSleepTimeInMinute = 10;
 
 #if DEBUG_SERIAL
 void debug(String data) {
-  // Serial.println(data);
+  Serial.println(data);
 }
 #endif
 
@@ -244,6 +244,9 @@ void setup()  {
   Serial.print("SLEEP TIME [NETPIE] = ");
   Serial.println(globalSleepTimeFromNetpieInMemory);
 
+  // set default to run always
+  sendSleepTimeInSecondToSTM32Minute(0);
+
   //////////////////////////////GPS//////////////////////////////
 
   startGPSService();
@@ -304,6 +307,7 @@ void builDataStringForTCPSocket() {
       Serial.println(globalData5);
   }
 }
+
 bool open_tcp() {
   Serial.println("===========");
   Serial.println("open_tcp");
@@ -319,40 +323,39 @@ bool open_tcp() {
   return ret;
 }
 
-
-
 bool writeDataStringToTCPSocket() {
-        /*
-      data0,version
-          91:2,2,2,2,2
-      data1:dist,lid,temp,humid,flame
-          91:61.00,0,27.56,52.87,0
-      data2:pitch,roll,pressure,batt
-          91:0.00,0.00,969,621.00
-       data3:sound,mq4,mq9,lux,sleep,millis(),ch4,co
-          91:0.00,0.00,0.00,25,10,60.50,0,0
-       data4:lat,lng,alt
-          91:18.7828670N,098.9788563E,268
-        */
-        tcp.println(globalData0Version);
-        tcp.println(globalData1);
-        tcp.println(globalData2);
-        tcp.println(globalData3);
-        tcp.println(globalData4GPS);
-        tcp.print(globalData5);
-        tcp.StopSend();
+    /*
+  data0,version
+      91:2,2,2,2,2
+  data1:dist,lid,temp,humid,flame
+      91:61.00,0,27.56,52.87,0
+  data2:pitch,roll,pressure,batt
+      91:0.00,0.00,969,621.00
+   data3:sound,mq4,mq9,lux,sleep,millis(),ch4,co
+      91:0.00,0.00,0.00,25,10,60.50,0,0
+   data4:lat,lng,alt
+      91:18.7828670N,098.9788563E,268
+    */
+    tcp.println(globalData0Version);
+    tcp.println(globalData1);
+    tcp.println(globalData2);
+    tcp.println(globalData3);
+    tcp.println(globalData4GPS);
+    tcp.print(globalData5);
+    tcp.StopSend();
 }
 
-void sendSleepTimeInSecondToSTM32InS(uint8_t stmSleepTimeS) {
+void sendSleepTimeInSecondToSTM32Minute(uint8_t stmSleepTimeInMinute) {
   // writeSleep to STM
   Serial.print("Send stemSleepTimeToSTM => ");
-  Serial.println(stmSleepTimeS);
+  Serial.print(stmSleepTimeInMinute);
+  Serial.println(" min.");
 
-  Serial2.write(stmSleepTimeS);
+  Serial2.write(stmSleepTimeInMinute);
   delay(1000);
-  Serial2.write(stmSleepTimeS);
+  Serial2.write(stmSleepTimeInMinute);
   delay(1000);
-  Serial2.write(stmSleepTimeS);
+  Serial2.write(stmSleepTimeInMinute);
   delay(1000);
   while(Serial2.available()) {
     Serial.println(Serial2.read());
@@ -398,14 +401,13 @@ void sendDataOverTCPSocket() {
       Serial.println("Closing tcp...");
       delay(10);
     }
-    delay(1000);
+    delay(100);
   }
 }
 
 //////////////////////////////mainLOOP////////////////////////////////
 void loop() {
-  // should be realtime mode
-  // Serial.print("globalSleepTimeFromNetpieInMemory")
+  // realtime mode
   while (globalSleepTimeFromNetpieInMemory == 0) {
     readAllSensors();
     builDataStringForTCPSocket();
@@ -415,18 +417,19 @@ void loop() {
       globalSleepTimeFromNetpieInMemory = freshSleepTimeFromNetpie;
     }
     sendDataOverTCPSocket();
-    if (gotGPSLocation == false) {
-      startGPSService();
-    }
+    // never sleep
+    sendSleepTimeInSecondToSTM32Minute(0);
     delay(10*1000);
   }
 
+  // sleep mode
   readAllSensors();
   builDataStringForTCPSocket();
   sendDataOverTCPSocket();
 
-  Serial.println("Being sleep...");
-  // TODO: must multiply by 60
-  sendSleepTimeInSecondToSTM32InS(globalSleepTimeFromNetpieInMemory/60);
-  sleepArduino(globalSleepTimeFromNetpieInMemory * 1000L);
+  Serial.println("Being slept...");
+  sendSleepTimeInSecondToSTM32Minute(globalSleepTimeFromNetpieInMemory);
+  // ms
+  // 120 minute = 10*60*1000
+  sleepArduino(6000000L);
 }

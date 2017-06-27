@@ -2,7 +2,7 @@
 #include "gnss.h"
 
 GNSS gps;
-float GPS_SEARCH_TIMEOUT_S = 60;
+float GPS_SEARCH_TIMEOUT_S = 45;
 extern uint8_t LED;
 
 // volatile char GNSS_data[58] = "";
