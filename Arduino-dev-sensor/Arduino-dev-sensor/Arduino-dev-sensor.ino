@@ -202,7 +202,7 @@ void setup()  {
 
 /////////////////////////////3G//////////////////////////////////
 #if DEBUG_SERIAL
-  gsm.Event_debug = debug;
+  // gsm.Event_debug = debug;
 #endif
   gsm.begin(&Serial3, 9600); // myserial
   gsm.PowerOn();
@@ -316,14 +316,31 @@ bool open_tcp() {
   Serial.print(":");
   Serial.println(TCP_SERVER_PORT);
   Serial.println("===========");
-  bool ret = tcp.Open(TCP_SERVER_ENDPOINT, TCP_SERVER_PORT);
-  Serial.print("RESULT = ");
-  Serial.println(ret);
-  delay(50);
+  bool ret = false;
+  // uint32_t _timeout = (60*1000L) + millis();
+  uint32_t max_retries = 30;
+  while(0 == tcp.Open(TCP_SERVER_ENDPOINT, TCP_SERVER_PORT) ) {
+    Serial.println("... OPEN TCP SOCKET FAILED....");
+    delay(1000);
+    // Serial.print("timeout = ");
+    // Serial.println(_timeout);
+    // Serial.print("millis() = ");
+    // Serial.println(millis());
+    if (--max_retries == 0) {
+      Serial.println("more than 30 seconds ... reboot");
+      asm volatile ("  jmp 0");
+    }
+  }
+
+  Serial.println("TCP Connected..");
+  ret = true;
   return ret;
 }
 
 bool writeDataStringToTCPSocket() {
+  Serial.print(millis());
+  Serial.println(" writeDataStringToTCPSocket");
+
     /*
   data0,version
       91:2,2,2,2,2
@@ -343,6 +360,8 @@ bool writeDataStringToTCPSocket() {
     tcp.println(globalData4GPS);
     tcp.print(globalData5);
     tcp.StopSend();
+    Serial.print(millis());
+    Serial.println(" /writeDataStringToTCPSocket");
 }
 
 void sendSleepTimeInSecondToSTM32Minute(uint8_t stmSleepTimeInMinute) {
@@ -387,19 +406,24 @@ void sleepArduino(uint32_t sleepTimeInMs) {
   Serial.print("Being sleep for ..");
   Serial.println(sleepTimeInMs);
   Serial.println(millis());
+  Serial.println("go to bed...");
   sleepCtrl.sleepDelay(sleepTimeInMs); // in MS
   // Arduino Reset
   asm volatile ("  jmp 0");
 }
 
 void sendDataOverTCPSocket() {
+  Serial.println("=============");
+  Serial.println("sendDataOverTCPSocket");
+  Serial.println("=============");
+
   if (open_tcp()) {
     if (tcp.StartSend()) {
       writeDataStringToTCPSocket();
     }
     while(!tcp.Close()){
-      Serial.println("Closing tcp...");
-      delay(10);
+      Serial.println("[2] Closing tcp...");
+      delay(100);
     }
     delay(100);
   }
@@ -409,6 +433,9 @@ void sendDataOverTCPSocket() {
 void loop() {
   // realtime mode
   while (globalSleepTimeFromNetpieInMemory == 0) {
+  Serial.println("=================");
+  Serial.println(" IN REAL-TIME MODE  ");
+  Serial.println("=================");
     readAllSensors();
     builDataStringForTCPSocket();
     long freshSleepTimeFromNetpie = getSleepTimeFromNetpie();
@@ -421,13 +448,19 @@ void loop() {
     sendSleepTimeInSecondToSTM32Minute(0);
     delay(10*1000);
   }
+  Serial.println("=================");
+  Serial.println(" IN SLEEP MODE");
+  Serial.println("=================");
 
   // sleep mode
   readAllSensors();
   builDataStringForTCPSocket();
   sendDataOverTCPSocket();
 
-  Serial.println("Being slept...");
+
+  Serial.println("  Being slept...");
+  Serial.println("  Being slept...");
+  Serial.println("  Being slept...");
   sendSleepTimeInSecondToSTM32Minute(globalSleepTimeFromNetpieInMemory);
   // ms
   // 120 minute = 10*60*1000

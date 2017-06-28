@@ -2,7 +2,7 @@
 #include "gnss.h"
 
 GNSS gps;
-float GPS_SEARCH_TIMEOUT_S = 45;
+float GPS_SEARCH_TIMEOUT_S = 40;
 extern uint8_t LED;
 
 // volatile char GNSS_data[58] = "";
@@ -77,7 +77,7 @@ void startGPSService() {
 
     gpsCounter += 1;
     if (gpsCounter%10 == 0) {
-      Serial.print(gpsCounter);
+      Serial.print(millis());
       Serial.println(" Waiting GPS...");
     }
 
