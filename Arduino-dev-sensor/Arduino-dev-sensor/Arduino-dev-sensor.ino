@@ -11,7 +11,7 @@
 #include "http.h"
 #include <ArduinoJson.h>
 
-#define BINID     "103"
+#define BINID     "100"
 uint8_t LED = 13;
 #define MODE_PIN A4
 
@@ -34,12 +34,133 @@ extern bool gotGPSLocation;
 
 // bool ret = tcp.Open("sock.traffy.xyz","Connecting to... ");
 //  bool ret = tcp.Open("api.traffy.xyz", "10777");
-String TCP_SERVER_ENDPOINT = "128.199.143.200";
-String TCP_SERVER_PORT     = "10777";
+// String TCP_SERVER_ENDPOINT = "128.199.143.200";
+// String TCP_SERVER_PORT     = "10777";
+// String TCP_SERVER_ENDPOINT = "mqtt.cmmc.io";
+// String TCP_SERVER_PORT     = "1883";
+String TCP_SERVER_ENDPOINT = "api.traffy.xyz";
+String TCP_SERVER_PORT     = "10778";
 
 INTERNET net;
 TCP tcp;
 UC_FILE file;
+
+///////////////////////////////////////////////////////////////////////////////
+struct NODEStructure {
+  uint8_t mac[6];
+  uint8_t buff[128];
+  uint8_t len;
+};
+
+#define tmpSize  128
+uint8_t tmp[tmpSize];
+uint8_t tmp_index;
+
+NODEStructure Node1;
+NODEStructure Node2;
+NODEStructure Node3;
+NODEStructure Node4;
+
+
+void serialEvent2() {
+  while (Serial2.available()) {
+    tmp[tmp_index] = Serial2.read();
+    // Serial.print(tmp[tmp_index], HEX);
+    // Serial.print(" ");
+    tmp_index++;
+    if (tmp_index >= tmpSize)tmp_index = 0;
+  }
+  MassageAnalysis();
+}
+
+uint8_t MassageAnalysis() {
+  uint8_t mac[6] = {0};
+  for (int i = tmp_index; i >= 2; i--) {
+    if ((tmp[i] == 0x0A) && (tmp[i - 1] == 0x0D)) {
+      tmp_index = 0;
+      for (int j = 0; j < i; j++) {
+        if ((tmp[j] == 0xFC) && (tmp[j + 1] == 0xFD)) {
+          uint8_t sum = 0;
+          for (uint8_t k = 0; k <=  (i - j - 3); k++) {
+            sum ^= tmp[j + k];
+          }
+          if (sum == tmp[i - j - 2]) {
+            memcpy(&mac, &tmp[j + 8], 6);
+            MassageSave(mac, &tmp[j], i - j + 1);
+            return 1;
+          } else {
+            return 0;
+          }
+        }
+      }
+    }
+  }
+  return 0;
+}
+
+uint8_t CheckMac(uint8_t* mac1, uint8_t* mac2) {
+  uint8_t val = 0x01;
+  for (int i = 0; i < 6; i++) {
+    if (mac1[i] != mac2[i]) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+void MassageSave(uint8_t* tmp, uint8_t* data, uint8_t len) {
+  static int index;
+  if (CheckMac(tmp, Node1.mac)) {
+    Serial.println("data node 1 ok");
+    memset(Node1.buff, 0, sizeof(Node1.buff));
+    memcpy(&Node1.buff, data, len);
+    Node1.len = len;
+  } else if (CheckMac(tmp, Node2.mac)) {
+    memset(Node2.buff, 0, sizeof(Node2.buff));
+    memcpy(&Node2.buff, data, len);
+    Node2.len = len;
+  } else if (CheckMac(tmp, Node3.mac)) {
+    memset(Node3.buff, 0, sizeof(Node3.buff));
+    memcpy(&Node3.buff, data, len);
+    Node3.len = len;
+  } else if (CheckMac(tmp, Node4.mac)) {
+    memset(Node4.buff, 0, sizeof(Node4.buff));
+    memcpy(&Node4.buff, data, len);
+    Node4.len = len;
+  } else {
+    switch (index) {
+      case 0:
+        memcpy(&Node1.mac, tmp, 6);
+        memset(Node1.buff, 0, sizeof(Node1.buff));
+        memcpy(&Node1.buff, data, len);
+        Node1.len = len;
+        break;
+      case 1:
+        memcpy(&Node2.mac, tmp, 6);
+        memset(Node2.buff, 0, sizeof(Node2.buff));
+        memcpy(&Node2.buff, data, len);
+        Node2.len = len;
+        break;
+      case 2:
+        memcpy(&Node3.mac, tmp, 6);
+        memset(Node3.buff, 0, sizeof(Node3.buff));
+        memcpy(&Node3.buff, data, len);
+        Node3.len = len;
+        break;
+      case 3:
+        memcpy(&Node4.mac, tmp, 6);
+        memset(Node4.buff, 0, sizeof(Node4.buff));
+        memcpy(&Node4.buff, data, len);
+        Node4.len = len;
+        break;
+    }
+    index++;
+    if (index == 4) index = 0;
+  }
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
 
 long globalSleepTimeFromNetpieInMemory = 3;
 
@@ -160,9 +281,17 @@ void read_file(String pattern, String file_name)
   file.ReadFile(pattern, file_name);
 }
 
+
+
+
+
+
+
+
+
 void setup()  {
   Serial.begin(9600);
-  Serial2.begin(9600);  //  serial to stm
+  Serial2.begin(9600);  //  serial connect to esp8266
 
   Serial.println(F("Program Start."));
   Serial.print(F("freeMemory()="));
@@ -353,15 +482,173 @@ bool writeDataStringToTCPSocket() {
    data4:lat,lng,alt
       91:18.7828670N,098.9788563E,268
     */
+
+
+
+    // tcp.println(globalData0Version);
+    // tcp.println(globalData1);
+    // tcp.println(globalData2);
+    // tcp.println(globalData3);
+    // tcp.println(globalData4GPS);
+    // tcp.print(globalData5);
+
+    // char dataInfo[]  = {
+    //   0xfc, 0xfd, 0x18, 0xfe, 0x34, 0xdb, 0x3b, 0x98, 0x18, 0xfe, 0x34, 0xee, 0xcd, 0x53, 0x30,
+    //   0xff, 0xfa, 0x1, 0x2, 0x3, 0x1, 0x28, 0xa, 0x0, 0x0, 0x38, 0x18, 0x0, 0x0, 0xe7, 0x3, 0x0, 0x0, 0x19, 0x5, 0x0,
+    //   0x0, 0xa, 0x65, 0x73, 0x70, 0x4c, 0x6f, 0x67, 0x30, 0x30, 0x35, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+    //   0x0, 0x0, 0x0, 0x0, 0x0, 0xfa, 0xd, 0xa
+    // };
+
+    // byte dataInfo[]  = {  // 21 data
+    //   0xfa, 0xfb, 0xff, 0xff, 0xff, 0xff,
+    //   0x5c, 0xcf, 0x7f, 0x9, 0x50, 0xa7,
+    //   0x5e, 0xcf, 0x7f, 0x9, 0x50, 0xa7,
+    //   0x3,
+    //   0xd, 0xa
+    // };
+
+    // byte dataInfo[]  = {  // 70 data
+    //   0xfc, 0xfd, 0x18, 0xfe, 0x34, 0xdb, 0x3b, 0x98, 0x18, 0xfe, 0x34, 0xee, 0xcd, 0x53, 0x30, // wrap
+    //   0xff, 0xfa, 0x1, 0x2, 0x3, 0x1,   //  head data
+    //   0x28, 0xa, 0x0, 0x0,    //  val1
+    //   0x38, 0x18, 0x0, 0x0,   //  val2
+    //   0xe7, 0x3, 0x0, 0x0,    //  val3
+    //   0x19, 0x5, 0x0, 0x0,    //  batt
+    //   0xa,                    //  name len
+    //   0x65, 0x73, 0x70, 0x4c, 0x6f, 0x67, 0x30, 0x30, 0x35, 0x20,   //  name to String
+    //   0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,   //  free data
+    //   0xfa, 0xd, 0xa          //  end wrap
+    //  };
+
+    // char str[32] = "";
+    // array_to_string(dataInfo, 21, str);
+
+
+
+    // String dataInfoSent = "" ; //= "0xfa, 0xfb, 0xff, 0xff, 0xff, 0xff,0x5c, 0xcf, 0x7f, 0x9, 0x50, 0xa7,0x5e, 0xcf, 0x7f, 0x9, 0x50, 0xa7,0x3,0xd, 0xa";
+    // dataInfoSent = String(dataInfo[0]) + String(dataInfo[1]) + String(dataInfo[2]);
+    // tcp.println(globalData0Version);
+    // tcp.println(globalData4GPS);
+
+
+
+    char str[] = "";
+    byte dataInfo[] = {};
+
+
+    Serial.println("Serial2 Read");
+
+    while (Serial2.available()) {
+      tmp[tmp_index] = Serial2.read();
+      Serial.print(tmp[tmp_index], HEX);
+      Serial.print(" ");
+      dataInfo[tmp_index] += tmp[tmp_index];
+      tmp_index++;
+      if (tmp_index >= tmpSize)tmp_index = 0;
+    }
+
+    uint8_t mac[6] = {0};
+  for (int i = tmp_index; i >= 2; i--) {
+    if ((tmp[i] == 0x0A) && (tmp[i - 1] == 0x0D)) {
+      tmp_index = 0;
+      for (int j = 0; j < i; j++) {
+        if ((tmp[j] == 0xFC) && (tmp[j + 1] == 0xFD)) {
+          uint8_t sum = 0;
+          for (uint8_t k = 0; k <=  (i - j - 3); k++) {
+            sum ^= tmp[j + k];
+          }
+          if (sum == tmp[i - j - 2]) {
+            memcpy(&mac, &tmp[j + 8], 6);
+            MassageSave(mac, &tmp[j], i - j + 1);
+            return 1;
+          } else {
+            return 0;
+          }
+        }
+      }
+    }
+  }
+    Serial.println(" ");
+  //  MassageAnalysis();
+    for (int i = 0; i < tmp_index; i++) {
+      Serial.print(tmp[i], HEX);
+      Serial.print(" ");
+    }
+
+    Serial.print("\n");
+    Serial.print("\n");
+
+    Serial.print("MAC1 ");
+    for (int i = 0; i < 6; i++) {
+      Serial.print(Node1.mac[i], HEX);
+      Serial.print(" ");
+    }
+    Serial.print("\t");  Serial.print("\t");
+    for (int i = 0; i < Node1.len; i++) {
+      Serial.print(Node1.buff[i], HEX);
+      Serial.print(" ");
+    }
+
+    Serial.print("\n");
+    Serial.print("MAC2 ");
+    for (int i = 0; i < 6; i++) {
+      Serial.print(Node2.mac[i], HEX);
+      Serial.print(" ");
+    }
+    Serial.print("\t");  Serial.print("\t");
+    for (int i = 0; i < Node2.len; i++) {
+      Serial.print(Node2.buff[i], HEX);
+      Serial.print(" ");
+    }
+
+
+
+
+
+
+    tcp.StartSend();
+
+    Serial.print("node buff = ");
+    // for(int i=1; i<Node1.len; i++) {
+    for(int i=1; i<70; i++) {
+      Serial.print(Node1.buff[i], HEX);
+      Serial.print(" ");
+      Serial.print("dataInfo = ");
+      Serial.println(dataInfo[i]);
+    }
+
+    Serial.print("  convert byte to char array = ");
+    Serial.println(str);
+
+    array_to_string(Node1.buff, Node1.len, str);
+
     tcp.println(globalData0Version);
-    tcp.println(globalData1);
-    tcp.println(globalData2);
-    tcp.println(globalData3);
-    tcp.println(globalData4GPS);
-    tcp.print(globalData5);
+    tcp.println(str);
+    tcp.print(globalData4GPS);
     tcp.StopSend();
+
+    // array_to_string(Node2.buff, Node2.len, str);
+    // tcp.print(str);
+    // array_to_string(Node3.buff, Node3.len, str);
+    // tcp.print(str);
+    // array_to_string(Node4.buff, Node4.len, str);
+    // tcp.print(str);
+    // tcp.StopSend();
+
     Serial.print(millis());
     Serial.println(" /writeDataStringToTCPSocket");
+}
+
+void array_to_string(byte array[], unsigned int len, char buffer[])
+{
+    for (unsigned int i = 0; i < len; i++)
+    {
+        byte nib1 = (array[i] >> 4) & 0x0F;
+        byte nib2 = (array[i] >> 0) & 0x0F;
+        buffer[i*2+0] = nib1  < 0xA ? '0' + nib1  : 'A' + nib1  - 0xA;
+        buffer[i*2+1] = nib2  < 0xA ? '0' + nib2  : 'A' + nib2  - 0xA;
+    }
+    buffer[len*2] = '\0';
 }
 
 void sendSleepTimeInSecondToSTM32Minute(uint8_t stmSleepTimeInMinute) {
@@ -376,9 +663,9 @@ void sendSleepTimeInSecondToSTM32Minute(uint8_t stmSleepTimeInMinute) {
   delay(1000);
   Serial2.write(stmSleepTimeInMinute);
   delay(1000);
-  while(Serial2.available()) {
-    Serial.println(Serial2.read());
-  }
+  // while(Serial2.available()) {
+  //   Serial.println(Serial2.read());
+  // }
   Serial.println(F("Sent..."));
 }
 
